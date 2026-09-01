@@ -906,3 +906,299 @@ This helped me understand the difference between **DNS resolution, IP addressing
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# DHCP Packet Analysis
+
+## Objective
+
+I wanted to understand how a device obtains and maintains its IPv4 network configuration using DHCP.
+
+## Lab Setup
+
+I captured DHCP traffic on my Kali Linux virtual machine using Wireshark.
+
+### Wireshark
+
+I captured traffic on:
+
+```text
+eth0
+```
+
+I used the following Wireshark display filter:
+
+```text
+bootp
+```
+
+### Commands I Used
+
+In a separate Kali terminal, I temporarily brought the network connection down and back up:
+
+```bash
+sudo nmcli connection down "Wired connection 1"
+sudo nmcli connection up "Wired connection 1"
+```
+
+This generated DHCP traffic that I captured in Wireshark.
+
+## Captured DHCP Traffic
+
+I observed two important packets:
+
+1. **DHCP Request**
+
+   * Source IP: `0.0.0.0`
+   * Destination IP: `255.255.255.255`
+   * Length: `330 bytes`
+   * Transaction ID: `0xb64eb6b3`
+
+2. **DHCP ACK**
+
+   * Source IP: `10.0.2.2`
+   * Destination IP: `255.255.255.255`
+   * Length: `590 bytes`
+   * Transaction ID: `0xb64eb6b3`
+
+The matching transaction ID showed that the Request and ACK belonged to the same DHCP transaction.
+
+Normally, DHCP is commonly explained using the DORA sequence:
+
+```text
+DHCP Discover
+       ↓
+DHCP Offer
+       ↓
+DHCP Request
+       ↓
+DHCP ACK
+```
+
+In my capture, I observed a Request followed by an ACK rather than the complete DORA sequence. This made sense because the connection was being brought back up and the client was requesting/confirming an already previously leased address.
+
+## DHCP Request Analysis
+
+The DHCP Request contained:
+
+* **BOOT REQUEST (1)**
+* Client Identifier
+* Requested IP Address: `10.0.2.15`
+* Parameter Request List
+
+The client identifier contained:
+
+```text
+0x01
+```
+
+The `01` identifies Ethernet as the hardware type used for the client identifier.
+
+The requested IP address was:
+
+```text
+10.0.2.15
+```
+
+This showed that the client was requesting to continue using the previously leased IPv4 address.
+
+### Parameter Request List
+
+The client also included a Parameter Request List containing configuration options such as:
+
+* Subnet Mask
+* DNS Server
+* Host Name
+* Domain Name
+* Interface MTU
+* Broadcast Address
+* Router
+* Static Routes
+* NTP Servers
+* Domain Search
+
+I learned that this list does not contain network errors. Instead, it tells the DHCP server which network configuration parameters the client wants to receive.
+
+## DHCP ACK Analysis
+
+The DHCP ACK contained the configuration that the DHCP server provided to the client.
+
+Important fields included:
+
+| Field             | Value           |
+| ----------------- | --------------- |
+| BOOTP message     | `BOOTREPLY (2)` |
+| DHCP Message Type | `ACK`           |
+| Transaction ID    | `0xb64eb6b3`    |
+| Assigned IP       | `10.0.2.15`     |
+| Subnet Mask       | `255.255.255.0` |
+| Router            | `10.0.2.2`      |
+| DNS Server        | `192.168.0.1`   |
+| Lease Time        | `86400 seconds` |
+| Server Identifier | `10.0.2.2`      |
+
+The `86400` second lease equals one day.
+
+The DHCP server was telling my machine that it could use `10.0.2.15` for the lease period, while also providing the subnet mask, default gateway, and DNS server required for network communication.
+
+## BOOTP and DHCP
+
+Wireshark displayed:
+
+```text
+BOOT REQUEST (1)
+```
+
+and:
+
+```text
+BOOTREPLY (2)
+```
+
+I learned that DHCP uses the older BOOTP message structure. Therefore, seeing `BOOT REQUEST` or `BOOTREPLY` in Wireshark does not mean that the packet is necessarily BOOTP instead of DHCP.
+
+The actual DHCP message type identifies the DHCP operation, such as:
+
+```text
+REQUEST
+ACK
+```
+
+## Understanding 0.0.0.0 and 255.255.255.255
+
+The DHCP client can use:
+
+```text
+0.0.0.0
+```
+
+as its source IPv4 address when it does not yet have an assigned IPv4 address.
+
+It can send to:
+
+```text
+255.255.255.255
+```
+
+which is the IPv4 limited broadcast address.
+
+This allows the client to communicate with DHCP servers on the local network even though the client does not yet have a normal IPv4 address.
+
+At Ethernet Layer 2, the corresponding broadcast destination is:
+
+```text
+ff:ff:ff:ff:ff:ff
+```
+
+I learned that `255.255.255.255` is not a subnet boundary. It is an IPv4 limited broadcast address.
+
+## MAC Address and DHCP
+
+I also learned that DHCP does not create the MAC address.
+
+The network interface already has a MAC address before IPv4 configuration takes place.
+
+In my Kali virtual machine, the network interface had:
+
+```text
+08:00:27:5a:87:bc
+```
+
+This is the MAC address of my VirtualBox virtual network interface.
+
+Therefore:
+
+```text
+MAC address → identifies the Layer 2 network interface
+IPv4 address → identifies the Layer 3 logical network address
+DHCP → provides IPv4 configuration
+```
+
+## DHCP, Subnet, Gateway and DNS Relationship
+
+My DHCP analysis helped me connect several networking concepts:
+
+```text
+DHCP
+  ↓
+IP address + subnet mask + gateway + DNS
+  ↓
+Subnet determines whether a destination is local
+  ↓
+ARP finds the MAC address of the local destination or gateway
+  ↓
+IP routing forwards traffic toward remote networks
+  ↓
+DNS resolves domain names into IP addresses
+```
+
+For example, my machine received:
+
+```text
+IP address:       10.0.2.15
+Subnet mask:      255.255.255.0 (/24)
+Default gateway:  10.0.2.2
+DNS server:       192.168.0.1
+```
+
+This means my machine knows its own logical address, the boundary of its local network, where to send traffic destined for other networks, and which DNS resolver to query.
+
+## Lease Expiration
+
+The DHCP lease was:
+
+```text
+86400 seconds = 1 day
+```
+
+I learned that DHCP addresses are normally leased rather than permanently assigned.
+
+The client normally attempts to renew the lease before it expires. If renewal succeeds, the client can continue using the address.
+
+If the lease eventually expires without successful renewal, the client must obtain valid DHCP configuration again. If DHCP remains unavailable, a system may fall back to a link-local address such as:
+
+```text
+169.254.x.x
+```
+
+## What I Learned
+
+I learned that DHCP is not simply a mechanism for giving a computer an IP address.
+
+It provides the configuration required for the host to participate properly in an IP network, including the IP address, subnet mask, default gateway, DNS server and lease duration.
+
+I also learned why a machine can communicate with a DHCP server before it has an IPv4 address. The network interface already has a MAC address, while `0.0.0.0` and `255.255.255.255` allow the initial IPv4 communication to take place through broadcast.
+
+Most importantly, I connected DHCP with the other protocols I have already studied:
+
+```text
+DHCP → network configuration
+ARP  → local IP-to-MAC resolution
+DNS  → name-to-IP resolution
+IP   → logical addressing and routing
+```
+
+This showed me that these protocols are not isolated concepts. They work together to allow a device to communicate on a network.
+
+
+
+
+
+
+
+
+
