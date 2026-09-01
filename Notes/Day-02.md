@@ -654,6 +654,253 @@ ARP analysis is also useful during security investigations because abnormal ARP 
 
 
 
+## DNS Packet Capture and Analysis
+
+### Objective
+
+I captured and analyzed DNS traffic using Wireshark to understand how a DNS query travels through the network and how the DNS server responds.
+
+### 1. Generating the DNS Traffic
+
+I started a Wireshark capture on the `eth0` interface and used the following command in Kali:
+
+```bash
+nslookup example.com
+```
+
+This generated a DNS request asking the DNS server for the IPv4 address associated with `example.com`.
+
+My DNS server was:
+
+```text
+192.168.0.1
+```
+
+The `nslookup` command returned:
+
+```text
+172.66.147.243
+104.20.23.154
+```
+
+It also returned IPv6 addresses because DNS can provide both IPv4 and IPv6 records.
+
+---
+
+### 2. Ethernet II
+
+The DNS query contained an Ethernet II header:
+
+```text
+Source MAC:      08:00:27:5a:87:bc
+Destination MAC: 52:54:00:12:35:00
+Type:            IPv4 (0x0800)
+```
+
+The source MAC address identifies my Kali machine, while the destination MAC identifies the next device on the local network.
+
+Unlike the ARP request I previously captured, the DNS packet was sent to a specific MAC address rather than the broadcast address `ff:ff:ff:ff:ff:ff`.
+
+I learned that DNS does not perform MAC-address resolution itself. DNS resolves domain names and IP addresses, while Ethernet uses MAC addresses for local network delivery. ARP may be used beforehand to discover the MAC address associated with the local next-hop IP when that information is not already known.
+
+---
+
+### 3. IPv4 Header
+
+The IPv4 header contained:
+
+```text
+Header Length: 20 bytes (5 × 32-bit words)
+Total Length:  57 bytes
+TTL:           64
+Protocol:      UDP (17)
+Source:        10.0.2.15
+Destination:   192.168.0.1
+```
+
+The IPv4 total length was 57 bytes. Since the IPv4 header was 20 bytes:
+
+```text
+57 − 20 = 37 bytes
+```
+
+Therefore, the UDP datagram occupied 37 bytes.
+
+The TTL was 64. TTL prevents an IPv4 packet from circulating indefinitely if there is a routing problem. A router normally decreases the TTL by one when forwarding the packet.
+
+The protocol value `17` identifies UDP as the protocol carried inside IPv4.
+
+---
+
+### 4. UDP Header
+
+The UDP header contained:
+
+```text
+Source Port:      58894
+Destination Port: 53
+Length:           37 bytes
+Checksum:         0xccee (unverified)
+```
+
+The source port `58894` was an ephemeral port selected by my Kali machine.
+
+The destination port was `53`, which is the standard port used by DNS.
+
+The UDP length was 37 bytes. UDP has an 8-byte header, leaving:
+
+```text
+37 − 8 = 29 bytes
+```
+
+for the DNS payload.
+
+The checksum helps detect corruption in the UDP datagram. Wireshark displayed it as unverified, which does not automatically mean that the packet was corrupted. Virtual machines and network-interface checksum offloading can affect how Wireshark observes checksums.
+
+---
+
+### 5. DNS Query
+
+The DNS query contained:
+
+```text
+Transaction ID: 0xc561
+Flags:          0x0100
+Questions:      1
+Name:           example.com
+Type:           A
+Class:          IN
+```
+
+The transaction ID identifies the DNS transaction and allows the client to associate a response with the corresponding query.
+
+The flags `0x0100` indicate a standard DNS query. The QR bit is `0`, meaning that this packet is a query rather than a response.
+
+There was one question.
+
+The requested record type was `A`, meaning that I was asking for an IPv4 address.
+
+The class was `IN`, meaning Internet.
+
+Therefore, the DNS request can be translated into:
+
+> I asked the DNS server: "What IPv4 address is associated with example.com?"
+
+---
+
+### 6. DNS Response
+
+The DNS server returned a standard query response with:
+
+```text
+Flags: 0x8180
+Result: No error
+```
+
+The response contained two A records:
+
+```text
+example.com → 172.66.147.243
+example.com → 104.20.23.154
+```
+
+Both records were:
+
+```text
+Type:  A
+Class: IN
+```
+
+This means the DNS server successfully answered my request and provided two IPv4 addresses associated with `example.com`.
+
+Multiple IPv4 addresses can be returned for the same domain for purposes such as redundancy, availability, traffic distribution, or network optimization.
+
+---
+
+### 7. Transaction ID Matching
+
+I also learned that the DNS response should contain the same Transaction ID as the query it answers.
+
+For my original capture:
+
+```text
+Query:    0xc561
+Response: 0xc561
+```
+
+The Transaction ID does not remain permanently the same. When I restarted Wireshark and generated a new DNS request, a different Transaction ID could be assigned.
+
+The important rule is:
+
+```text
+Same transaction:
+Query ID = Response ID
+```
+
+This allows the DNS client to match the response to the correct request.
+
+---
+
+### 8. Complete DNS Packet Structure
+
+The DNS query I analyzed can be represented as:
+
+```text
+Ethernet II
+│
+├── Source MAC: 08:00:27:5a:87:bc
+├── Destination MAC: 52:54:00:12:35:00
+└── Type: IPv4
+        │
+        └── IPv4
+            ├── Source: 10.0.2.15
+            ├── Destination: 192.168.0.1
+            ├── Header: 20 bytes
+            ├── Total Length: 57 bytes
+            ├── TTL: 64
+            └── Protocol: UDP (17)
+                    │
+                    └── UDP
+                        ├── Source Port: 58894
+                        ├── Destination Port: 53
+                        ├── Length: 37 bytes
+                        └── Checksum: 0xccee
+                                │
+                                └── DNS
+                                    ├── Transaction ID: 0xc561
+                                    ├── Query: example.com
+                                    ├── Type: A
+                                    └── Class: IN
+```
+
+### What I Learned
+
+I learned that a single DNS communication involves several networking layers, each performing a different function:
+
+```text
+MAC      → Local network delivery
+IP       → Logical addressing
+UDP      → Transport and port identification
+DNS      → Domain-name and IP-address resolution
+```
+
+I also learned that DNS does not use MAC addresses to perform name resolution. The MAC address belongs to the Ethernet layer and is used for local-hop delivery, while DNS operates at the application layer.
+
+The complete process is therefore:
+
+```text
+example.com
+     ↓
+DNS query
+     ↓
+DNS server
+     ↓
+IPv4 addresses
+172.66.147.243
+104.20.23.154
+```
+
+This helped me understand the difference between **DNS resolution, IP addressing, Ethernet addressing, and ARP**, rather than treating them as the same process.
 
 
 
