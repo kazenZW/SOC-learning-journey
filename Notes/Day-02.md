@@ -1202,3 +1202,234 @@ This showed me that these protocols are not isolated concepts. They work togethe
 
 
 
+
+
+
+
+
+
+
+# TCP Packet Analysis
+
+## Objective
+
+Analyze TCP traffic in Wireshark to understand connection establishment, sequence and acknowledgment numbers, TCP flags, data transfer, and connection termination.
+
+## 1. TCP Three-Way Handshake
+
+TCP establishes a connection using three packets:
+
+| Packet | Direction                           | Flags            | Seq | Ack | Len | Meaning                                          |
+| ------ | ----------------------------------- | ---------------- | --: | --: | --: | ------------------------------------------------ |
+| 9      | 10.0.2.15:48008 → 172.66.147.243:80 | `0x002` SYN      |   0 |   0 |   0 | Client requests a TCP connection                 |
+| 10     | 172.66.147.243:80 → 10.0.2.15:48008 | `0x012` SYN, ACK |   0 |   1 |   0 | Server accepts and acknowledges the client's SYN |
+| 11     | 10.0.2.15:48008 → 172.66.147.243:80 | `0x010` ACK      |   1 |   1 |   0 | Client acknowledges the server's SYN             |
+
+### Important observation
+
+Although SYN has `TCP Segment Len = 0`, a SYN **consumes one sequence number**.
+
+Therefore:
+
+* Client SYN: `Seq = 0`
+* Server acknowledges it with `Ack = 1`
+* Client's next sequence number becomes `1`
+
+The same principle applies to FIN during TCP termination.
+
+---
+
+## 2. TCP Sequence and Acknowledgment Numbers
+
+TCP uses sequence numbers to keep track of bytes transmitted.
+
+The most important rule learned was:
+
+**ACK means the next byte expected, not the last byte received.**
+
+For normal TCP data:
+
+`Next ACK = Sequence Number + TCP Segment Length`
+
+### Practical example
+
+Packet 12 contained an HTTP request:
+
+* Sequence Number = `1`
+* TCP Segment Length = `75`
+* ACK = `1`
+
+Therefore:
+
+`1 + 75 = 76`
+
+The server subsequently acknowledged:
+
+`ACK = 76`
+
+This means the server successfully received bytes through sequence number `75` and is expecting byte `76` next.
+
+### Important distinction
+
+TCP has **two independent sequence-number spaces**:
+
+* Client → Server
+* Server → Client
+
+Each direction maintains its own sequence numbers and acknowledgments.
+
+---
+
+## 3. TCP Flags
+
+TCP flags are bit fields. They do not rotate from one value to another; multiple flags can be enabled at the same time.
+
+| Hex Value | Flags     | Meaning                                                          |
+| --------- | --------- | ---------------------------------------------------------------- |
+| `0x002`   | SYN       | Initiates a TCP connection                                       |
+| `0x010`   | ACK       | Acknowledges received data/control information                   |
+| `0x012`   | SYN + ACK | Server acknowledges SYN and synchronizes its own sequence number |
+| `0x018`   | PSH + ACK | Carries data and requests prompt delivery toward the application |
+| `0x011`   | FIN + ACK | Begins graceful TCP termination                                  |
+| `0x014`   | RST + ACK | Abruptly resets/terminates a connection                          |
+
+The flag value is a combination of individual bits.
+
+For example:
+
+`0x018 = 0x010 + 0x008`
+
+Therefore:
+
+`0x018 = ACK + PSH`
+
+---
+
+## 4. HTTP Over TCP
+
+The TCP capture also demonstrated that application protocols can operate on top of TCP.
+
+The observed traffic was:
+
+**Ethernet → IPv4 → TCP → HTTP**
+
+Packet 12 contained:
+
+`GET / HTTP/1.1`
+
+Its TCP information included:
+
+* `Seq = 1`
+* `Ack = 1`
+* `TCP Segment Len = 75`
+* Flags = `PSH, ACK`
+
+The HTTP request was therefore carried as TCP payload.
+
+The calculation was:
+
+`Seq 1 + 75 bytes = 76`
+
+So the next expected byte from the client was `76`.
+
+---
+
+## 5. TCP Graceful Termination
+
+TCP can close a connection gracefully using FIN packets.
+
+The captured termination sequence was:
+
+1. **Client FIN + ACK**
+
+   * `Seq = 76`
+   * `Ack = 874`
+   * `Len = 0`
+
+2. **Server ACK**
+
+   * `Ack = 77`
+
+3. **Server FIN + ACK**
+
+   * `Seq = 874`
+   * `Ack = 77`
+
+4. **Client final ACK**
+
+   * `Ack = 875`
+
+### Important observation
+
+A FIN consumes **one sequence number**, even though its TCP segment length is zero.
+
+Therefore:
+
+`Seq 76 → 77`
+
+and:
+
+`Seq 874 → 875`
+
+This explains the acknowledgment values observed during the termination process.
+
+---
+
+## 6. TCP RST
+
+A TCP reset provides an abrupt way to terminate a connection.
+
+The capture contained:
+
+`0x014`
+
+This represents:
+
+`RST + ACK`
+
+Unlike FIN, RST does not perform the normal graceful shutdown process. It immediately tells the other endpoint that the connection should be reset.
+
+---
+
+## 7. What I Learned
+
+By analyzing actual packets in Wireshark, I learned how to:
+
+* Identify the TCP three-way handshake.
+* Recognize SYN, SYN-ACK, and ACK packets.
+* Decode TCP flag values from hexadecimal.
+* Understand that ACK represents the **next byte expected**.
+* Calculate acknowledgments from sequence numbers and segment lengths.
+* Understand that SYN and FIN consume one sequence number.
+* Understand that each TCP direction has its own sequence-number space.
+* Identify application data carried by TCP.
+* Recognize PSH + ACK during data transfer.
+* Distinguish graceful FIN termination from abrupt RST termination.
+* Analyze TCP behavior from packet fields instead of relying only on memorized definitions.
+
+## TCP Analysis Conclusion
+
+The packet capture demonstrated the complete TCP lifecycle:
+
+**SYN → SYN-ACK → ACK → DATA → FIN/ACK → ACK → FIN/ACK → ACK**
+
+It also demonstrated that TCP provides reliable, ordered byte-stream communication using sequence numbers, acknowledgments, control flags, and connection-management mechanisms.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
