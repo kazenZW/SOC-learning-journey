@@ -1433,3 +1433,200 @@ It also demonstrated that TCP provides reliable, ordered byte-stream communicati
 
 
 
+
+---
+
+# UDP Packet Analysis
+
+## 1. UDP Overview
+
+UDP (User Datagram Protocol) is a connectionless transport-layer protocol.
+
+Unlike TCP, UDP does not establish a connection using a three-way handshake and does not provide built-in sequence numbers, acknowledgments, retransmissions, or ordered delivery.
+
+UDP has a fixed **8-byte header** consisting of:
+
+* Source Port
+* Destination Port
+* Length
+* Checksum
+
+---
+
+## 2. UDP Packet Observed in Wireshark
+
+The captured traffic contained DNS communication over UDP.
+
+Observed packet:
+
+`OpenWrt → 10.0.2.15`
+
+Protocol:
+
+`UDP`
+
+Source Port:
+
+`53571`
+
+Destination Port:
+
+`53`
+
+The destination port `53` identified the application traffic as DNS.
+
+The source port `53571` was an ephemeral client-side port.
+
+---
+
+## 3. UDP Length
+
+The UDP length field was:
+
+`50 bytes`
+
+The UDP header is always:
+
+`8 bytes`
+
+Therefore:
+
+`50 - 8 = 42 bytes`
+
+The UDP payload was therefore:
+
+`42 bytes`
+
+The UDP length field represents the complete UDP datagram:
+
+`UDP Header + UDP Payload`
+
+---
+
+## 4. UDP Checksum
+
+The observed checksum was:
+
+`0xccfb`
+
+The checksum is used to provide integrity checking for the UDP datagram.
+
+Wireshark displayed the checksum as:
+
+`[unverified]`
+
+This does not necessarily mean that the checksum was incorrect. Local packet capture and checksum offloading can cause Wireshark to capture packets before the operating system or network interface has completed checksum processing.
+
+---
+
+## 5. UDP and DNS
+
+The captured UDP traffic carried DNS messages.
+
+The DNS query used:
+
+`UDP/53`
+
+The matching response contained:
+
+`PTR OpenWrt`
+
+The DNS transaction ID:
+
+`0x966e`
+
+was used to correlate the DNS query with its response.
+
+The query contained:
+
+`1.0.168.192.in-addr.arpa`
+
+This is a reverse DNS query for:
+
+`192.168.0.1`
+
+The IPv4 octets are reversed in the reverse-DNS namespace.
+
+---
+
+## 6. UDP vs TCP
+
+TCP provides:
+
+* Connection establishment
+* Sequence numbers
+* Acknowledgments
+* Retransmission
+* Ordered delivery
+* Connection termination
+
+UDP provides:
+
+* No transport-layer handshake
+* No sequence numbers
+* No acknowledgments
+* No built-in retransmission
+* No guarantee of ordering
+* Lower protocol overhead
+
+UDP is therefore useful for protocols and applications where low overhead or speed is important.
+
+Examples include:
+
+* DNS
+* DHCP
+* NTP
+* VoIP
+* Streaming
+* QUIC
+
+---
+
+## 7. SOC Analyst Relevance
+
+UDP traffic should not automatically be considered suspicious simply because it does not establish a TCP connection.
+
+A SOC analyst should examine:
+
+* Source and destination IP addresses
+* Source and destination ports
+* UDP payload
+* Packet frequency
+* Packet sizes
+* Timing and communication patterns
+* Expected versus unexpected services
+* Whether the traffic matches the claimed application protocol
+
+Unusual UDP activity can be associated with:
+
+* DNS tunneling
+* UDP-based scanning
+* Reflection/amplification attacks
+* Unexpected services
+* Malformed or suspicious application payloads
+
+The important lesson is that the UDP header alone does not tell the complete story. The analyst must examine the application-layer protocol and the communication behavior.
+
+---
+
+## 8. What I Learned
+
+By analyzing actual UDP packets in Wireshark, I learned how to:
+
+* Identify UDP traffic in a packet capture.
+* Identify source and destination ports.
+* Recognize DNS traffic using UDP port 53.
+* Understand the fixed 8-byte UDP header.
+* Calculate UDP payload size from the UDP length field.
+* Understand the purpose of the UDP checksum.
+* Understand why a checksum may appear as `[unverified]` in Wireshark.
+* Correlate DNS requests and responses using the DNS transaction ID.
+* Understand the difference between UDP transport behavior and TCP transport behavior.
+* Recognize that UDP does not provide TCP-style connection management.
+* Apply UDP analysis from a SOC perspective rather than relying only on protocol definitions.
+
+## UDP Analysis Conclusion
+
+The packet capture demonstrated UDP carrying DNS traffic without the connection-establishment process used by TCP.
+
+The analysis connected the UDP transport layer to the DNS application layer and demonstrated how packet fields, ports, payloads, and communication behavior can be used to understand network traffic.
