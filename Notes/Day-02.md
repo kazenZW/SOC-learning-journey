@@ -1630,3 +1630,270 @@ By analyzing actual UDP packets in Wireshark, I learned how to:
 The packet capture demonstrated UDP carrying DNS traffic without the connection-establishment process used by TCP.
 
 The analysis connected the UDP transport layer to the DNS application layer and demonstrated how packet fields, ports, payloads, and communication behavior can be used to understand network traffic.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# HTTP Packet Analysis
+
+## 1. Objective
+
+Analyze HTTP traffic captured in Wireshark to identify the structure of an HTTP request and response, examine the fields visible at the application layer, and understand the security implications of unencrypted HTTP communication.
+
+---
+
+## 2. Capture Method
+
+HTTP traffic was generated from the Kali Linux system using:
+
+```bash
+curl http://example.com
+```
+
+Wireshark display filter:
+
+```text
+http
+```
+
+Two HTTP packets were selected for analysis:
+
+* HTTP GET request
+* HTTP 200 OK response
+
+---
+
+## 3. Packet 1 — HTTP GET Request
+
+### Network Information
+
+| Field            | Value           |
+| ---------------- | --------------- |
+| Source IP        | `10.0.2.15`     |
+| Destination IP   | `104.20.23.154` |
+| Source Port      | `37152`         |
+| Destination Port | `80`            |
+| Protocol         | HTTP            |
+| Request Method   | `GET`           |
+| Request URI      | `/`             |
+| HTTP Version     | `HTTP/1.1`      |
+
+### HTTP Request Headers
+
+| Field      | Value         |
+| ---------- | ------------- |
+| Host       | `example.com` |
+| User-Agent | `curl/8.20.0` |
+| Accept     | `*/*`         |
+
+### Interpretation
+
+The client at `10.0.2.15` initiated an HTTP connection to `104.20.23.154` using TCP port `80`.
+
+The `GET` method requests the resource located at `/` from the host `example.com`.
+
+The `Host` header identifies the destination hostname, while the `User-Agent` identifies the client software as `curl/8.20.0`.
+
+Because this is HTTP rather than HTTPS, these application-layer fields are visible directly in the packet capture.
+
+---
+
+## 4. Packet 2 — HTTP Response
+
+### Network Information
+
+| Field            | Value           |
+| ---------------- | --------------- |
+| Source IP        | `104.20.23.154` |
+| Destination IP   | `10.0.2.15`     |
+| Source Port      | `80`            |
+| Destination Port | `37152`         |
+| Protocol         | HTTP            |
+| HTTP Version     | `HTTP/1.1`      |
+| Status Code      | `200`           |
+| Reason Phrase    | `OK`            |
+
+### Response Information
+
+| Field                                    | Observed Value |
+| ---------------------------------------- | -------------- |
+| Server                                   | `cloudflare`   |
+| Content-Type                             | `text/html`    |
+| TCP Payload                              | `873 bytes`    |
+| Wireshark size/chunk-related observation | `559 octets`   |
+
+> **Note:** The `559 octets` observation is intentionally not documented as `Content-Length`. The exact `Content-Length` field was not identified in the capture, so no assumption is made about what the value represents.
+
+### Interpretation
+
+The server responded with:
+
+```text
+HTTP/1.1 200 OK
+```
+
+The **200 status code** indicates that the HTTP request was successfully processed.
+
+The **OK reason phrase** accompanies the 200 status code and indicates a successful response.
+
+The `Server` field identifies Cloudflare as the server infrastructure observed in the response.
+
+The `Content-Type` indicates that the returned resource is HTML content.
+
+---
+
+## 5. Request/Response Flow
+
+```text
+Kali Linux
+10.0.2.15:37152
+        |
+        | HTTP GET /
+        | Host: example.com
+        | User-Agent: curl/8.20.0
+        |
+        v
+104.20.23.154:80
+        |
+        | HTTP/1.1 200 OK
+        | Server: cloudflare
+        | Content-Type: text/html
+        |
+        v
+Kali Linux
+10.0.2.15:37152
+```
+
+---
+
+## 6. SOC Security Analysis
+
+HTTP traffic provides useful information to a SOC analyst because application-layer details can be inspected directly when the traffic is unencrypted.
+
+Important indicators that can be investigated in HTTP traffic include:
+
+* Suspicious or unusual URI paths
+* Unexpected HTTP methods
+* Suspicious User-Agent strings
+* Connections to unexpected external IP addresses
+* Unusual server responses
+* Repeated `4xx` or `5xx` responses
+* Unexpected redirects
+* Cleartext credentials or sensitive information
+* Suspicious downloads
+* Possible command-and-control communication
+
+In this capture, the traffic was generated intentionally using `curl` to `example.com`, so the observed HTTP request is expected and benign.
+
+---
+
+## 7. Security Significance
+
+The most important security observation is that HTTP transmits application-layer information without the encryption provided by TLS.
+
+An analyst examining an HTTP capture can therefore potentially see:
+
+* Requested resources
+* Hostnames
+* HTTP methods
+* User-Agent information
+* HTTP headers
+* Server responses
+* Potentially sensitive application data
+
+This makes unencrypted HTTP significantly less resistant to interception and inspection than HTTPS.
+
+---
+
+## 8. Key Learning
+
+This capture demonstrated the complete HTTP request/response relationship:
+
+```text
+Client
+  |
+  | GET / HTTP/1.1
+  |
+  v
+Server
+  |
+  | 200 OK
+  |
+  v
+Client
+```
+
+The analysis also demonstrated the importance of examining both sides of an HTTP exchange. The request identifies what the client asked for, while the response status code, reason phrase, headers, and payload information show how the server responded.
+
+HTTP analysis is therefore useful to a SOC analyst for identifying abnormal web activity, investigating suspicious connections, and detecting potentially malicious application-layer behavior.
+
+---
+
+## 9. Evidence Summary
+
+**Request:**
+
+`10.0.2.15:37152 → 104.20.23.154:80`
+
+`GET / HTTP/1.1`
+
+**Response:**
+
+`104.20.23.154:80 → 10.0.2.15:37152`
+
+`HTTP/1.1 200 OK`
+
+**Key observations:**
+
+* HTTP over TCP port `80`
+* `GET` request
+* Host: `example.com`
+* User-Agent: `curl/8.20.0`
+* Server: `cloudflare`
+* HTTP status: `200`
+* Reason phrase: `OK`
+* HTML content returned
+* Application-layer information visible in plaintext
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
