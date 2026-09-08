@@ -1871,6 +1871,453 @@ HTTP analysis is therefore useful to a SOC analyst for identifying abnormal web 
 
 
 
+# TLS Packet Analysis
+
+## 1. Objective
+
+Analyze TLS traffic captured in Wireshark to understand how TLS establishes an encrypted connection, identify the information visible during the TLS handshake, determine the negotiated TLS version and cipher suite, and examine what becomes encrypted after the handshake.
+
+---
+
+## 2. Capture Method
+
+TLS traffic was generated from the Kali Linux system using:
+
+```bash
+curl -v https://example.com
+```
+
+Wireshark display filter:
+
+```text
+tls
+```
+
+The capture was examined to identify the TLS handshake and subsequent encrypted traffic.
+
+---
+
+## 3. TLS Handshake
+
+The TLS handshake allows the client and server to negotiate the parameters required to establish a secure connection.
+
+The observed sequence included:
+
+```text
+Client
+   |
+   | Client Hello
+   |
+   v
+Server
+   |
+   | Server Hello
+   |
+   v
+Encrypted TLS Communication
+```
+
+The handshake is important because the client and server must agree on cryptographic parameters before application data can be protected.
+
+---
+
+## 4. Client Hello
+
+The Client Hello was sent by the Kali client to initiate the TLS connection.
+
+Important observations included:
+
+| Field                 | Observed Value     |
+| --------------------- | ------------------ |
+| Legacy Version        | `0x0303`           |
+| Supported Versions    | `0x0304`, `0x0303` |
+| Cipher Suites Offered | `90`               |
+
+The Client Hello contains the cryptographic capabilities supported by the client.
+
+The client offered multiple cipher suites and TLS versions so that the server could select parameters supported by both sides.
+
+### Important TLS Version Observation
+
+The value:
+
+```text
+0x0303
+```
+
+appeared in the TLS handshake.
+
+This value corresponds to the TLS 1.2 record/version representation commonly seen in TLS traffic.
+
+However, the presence of `0x0303` does **not** by itself prove that the connection is using TLS 1.2.
+
+The Server Hello must be examined to determine the negotiated TLS version.
+
+---
+
+## 5. Server Hello
+
+The server responded with a Server Hello containing the parameters selected for the secure connection.
+
+Important observations were:
+
+| Field                 | Observed Value           |
+| --------------------- | ------------------------ |
+| Selected TLS Version  | `TLS 1.3`                |
+| Version Value         | `0x0304`                 |
+| Selected Cipher Suite | `TLS_AES_256_GCM_SHA384` |
+| Cipher Suite Value    | `0x1302`                 |
+| Key Share             | `X25519MLKEM768`         |
+| Group                 | `4588`                   |
+| Key Share Length      | `1120`                   |
+
+The Server Hello therefore provides the decisive evidence that the connection negotiated:
+
+```text
+TLS 1.3
+```
+
+rather than TLS 1.2.
+
+The selected cipher suite was:
+
+```text
+TLS_AES_256_GCM_SHA384
+```
+
+This provides authenticated encryption using AES-256-GCM, with SHA-384 associated with the TLS 1.3 cipher-suite definition.
+
+The observed key-share information showed:
+
+```text
+X25519MLKEM768
+```
+
+with group:
+
+```text
+4588
+```
+
+and a key-share length of:
+
+```text
+1120 bytes
+```
+
+---
+
+## 6. TLS Version Interpretation
+
+One of the most important lessons from this capture was that TLS packet fields must be interpreted in context.
+
+The capture contained:
+
+```text
+0x0303
+```
+
+in the TLS record/legacy version information.
+
+It also contained:
+
+```text
+Supported Version: 0x0304
+```
+
+and the Server Hello selected:
+
+```text
+TLS 1.3
+0x0304
+```
+
+Therefore, the correct conclusion is:
+
+```text
+Negotiated TLS Version = TLS 1.3
+```
+
+The `0x0303` value should not incorrectly be reported as evidence that the connection negotiated TLS 1.2.
+
+---
+
+## 7. Encrypted Application Data
+
+After the TLS handshake, application-layer traffic was observed as encrypted TLS Application Data.
+
+One significant packet was:
+
+```text
+Packet: 19
+Protocol: TLS
+Type: Application Data
+Length: 3854 bytes
+```
+
+Wireshark associated the encrypted traffic with the HTTP communication through the TLS session.
+
+Unlike the earlier HTTP capture performed over TCP port 80, the HTTPS application data was not available for direct inspection as plaintext HTTP.
+
+Instead, the application data appeared as encrypted TLS records.
+
+This demonstrates the primary security function of TLS:
+
+```text
+HTTP Application Data
+        ↓
+      TLS
+        ↓
+   Encrypted Data
+```
+
+---
+
+## 8. Change Cipher Spec
+
+Another observed packet was:
+
+```text
+Packet: 21
+Protocol: TLS
+Length: 1 byte
+```
+
+The packet was identified as:
+
+```text
+Change Cipher Spec
+```
+
+In modern TLS 1.3, Change Cipher Spec is not used in the same way as it was in TLS 1.2 for switching to encrypted communication.
+
+TLS 1.3 can include a Change Cipher Spec record for compatibility with older implementations and middleboxes.
+
+Therefore, its presence in the capture does not mean that TLS 1.2 was negotiated.
+
+The negotiated protocol version remains:
+
+```text
+TLS 1.3
+```
+
+based on the Server Hello.
+
+---
+
+## 9. Observed TLS Packet Sequence
+
+The capture contained the following relevant packet sequence:
+
+```text
+19
+21
+23
+24
+27
+27
+30
+31
+32
+```
+
+The sequence demonstrates that the TLS session contained multiple records after the initial handshake, including encrypted application data.
+
+Repeated packet numbers/record observations must be interpreted using the actual Wireshark packet list and TLS stream rather than assuming every record represents a separate application-layer message.
+
+---
+
+## 10. HTTP vs HTTPS
+
+The previous HTTP analysis demonstrated that HTTP application data can be inspected directly:
+
+```text
+GET / HTTP/1.1
+Host: example.com
+User-Agent: curl/8.20.0
+```
+
+With HTTPS, the HTTP communication is carried inside TLS.
+
+Conceptually:
+
+```text
+HTTP
+  ↓
+TLS
+  ↓
+TCP
+  ↓
+IP
+  ↓
+Ethernet
+```
+
+Therefore, after TLS encryption is established, an analyst cannot normally read the HTTP request and response contents directly from the packet capture without the appropriate decryption keys or session secrets.
+
+---
+
+## 11. SOC Security Analysis
+
+TLS significantly changes what a SOC analyst can see at the application layer.
+
+Visible information can include network-level and TLS metadata such as:
+
+* Source and destination IP addresses
+* Source and destination ports
+* TLS handshake messages
+* Negotiated TLS version
+* Cipher suite
+* TLS extensions
+* Key-exchange information
+* Certificate-related information when present
+* Packet sizes
+* Timing
+* Connection frequency
+* Server identity information exposed through the TLS handshake
+
+However, the actual application data becomes encrypted.
+
+This means a SOC analyst may need to rely on metadata and other security telemetry when inspecting encrypted communications.
+
+Suspicious TLS activity can include:
+
+* Connections to unexpected external infrastructure
+* Unusual TLS versions or configurations
+* Rare or suspicious cipher suites
+* Abnormal connection frequency
+* Unusual packet-size patterns
+* Unexpected encrypted connections from applications that normally do not use TLS
+* TLS connections associated with known malicious infrastructure
+* Certificate anomalies
+* Possible command-and-control communication hidden inside encrypted traffic
+
+Encryption therefore does not make traffic automatically benign.
+
+---
+
+## 12. Security Significance
+
+The major security significance of TLS is the protection of application data during transmission.
+
+Compared with the HTTP capture:
+
+```text
+HTTP
+Application Data → Visible
+```
+
+the TLS-protected connection provides:
+
+```text
+HTTPS
+Application Data → Encrypted
+```
+
+TLS helps provide:
+
+* Confidentiality
+* Integrity
+* Authentication of the server through certificates
+
+The capture demonstrated how encryption prevents normal packet inspection from exposing the underlying HTTP application data directly.
+
+---
+
+## 13. Key Learning
+
+This capture demonstrated the TLS handshake and showed how a secure HTTPS connection is established.
+
+The most important observations were:
+
+```text
+Client Hello
+      ↓
+Server Hello
+      ↓
+TLS 1.3 negotiated
+      ↓
+TLS_AES_256_GCM_SHA384 selected
+      ↓
+Key exchange information
+      ↓
+Encrypted Application Data
+```
+
+The capture also demonstrated an important Wireshark analysis principle:
+
+> A field should not be interpreted in isolation.
+
+Although `0x0303` appeared in the TLS traffic, the Server Hello showed that the negotiated version was:
+
+```text
+TLS 1.3
+```
+
+This distinction is important when performing packet analysis because TLS 1.3 retains legacy version representations in some record fields for compatibility.
+
+---
+
+## 14. Evidence Summary
+
+**TLS connection:**
+
+```text
+curl -v https://example.com
+```
+
+**Wireshark filter:**
+
+```text
+tls
+```
+
+**Client Hello:**
+
+```text
+Legacy Version:       0x0303
+Supported Versions:   0x0304 / 0x0303
+Cipher Suites:        90
+```
+
+**Server Hello:**
+
+```text
+Negotiated Version:   TLS 1.3
+Version:              0x0304
+Cipher Suite:         TLS_AES_256_GCM_SHA384
+Cipher Suite ID:      0x1302
+Key Share:             X25519MLKEM768
+Group:                 4588
+Key Share Length:      1120 bytes
+```
+
+**Encrypted Application Data:**
+
+```text
+Packet: 19
+Length: 3854 bytes
+```
+
+**Change Cipher Spec:**
+
+```text
+Packet: 21
+Length: 1 byte
+```
+
+**Observed TLS packet sequence:**
+
+```text
+19, 21, 23, 24, 27, 27, 30, 31, 32
+```
+
+**Final conclusion:**
+
+```text
+The capture demonstrates an HTTPS connection
+using TLS 1.3 with encrypted application data.
+```
 
 
 
