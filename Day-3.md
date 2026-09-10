@@ -1,584 +1,406 @@
-
 # Day 3 — Practical SOC Network Investigations
 
 ## Objective
 
-The objective of Day 3 was to move from basic protocol analysis into practical SOC investigation of suspicious network behavior.
-
-The investigations focused on identifying abnormal communication patterns, extracting evidence from packet captures, distinguishing malicious-looking behavior from confirmed malicious activity, and applying SOC analyst reasoning.
+The objective of Day 3 was to move from individual protocol analysis into practical SOC network investigations. I used controlled lab traffic to observe suspicious and security-relevant network behaviours, capture the traffic in Wireshark, and correlate network events to understand what was happening rather than relying only on protocol definitions.
 
 ## Lab Environment
 
 ### Systems
 
-* Kali Linux — Analyst workstation
-* Metasploitable — Controlled vulnerable laboratory host
-* Wireshark — Packet capture and analysis
-* Nmap — Controlled network reconnaissance
-* curl — HTTP testing
-* dig — DNS analysis
-* Netcat (`nc`) — Controlled C2-style communication
+* **Kali Linux**
 
-### Network
+  * Host-only IP: `192.168.56.103`
+  * Used for network investigation and traffic generation
+* **Metasploitable2**
 
-```text
-Kali Linux
-192.168.56.103
-     |
-     | Host-only isolated network
-     |
-Metasploitable
-192.168.56.101
-```
+  * Host-only IP: `192.168.56.101`
+  * Used as the controlled vulnerable target
 
-The C2 investigation was conducted on the isolated Host-only network to prevent interaction with real external C2 infrastructure.
+### Tools
+
+* Wireshark
+* Nmap
+* curl
+* dig
+* Netcat
+* tcpdump
 
 ---
 
 # Investigation 1 — Malicious Traffic Analysis
 
-## Objective
+I began with benign traffic to establish a baseline before generating controlled security-relevant traffic.
 
-Identify traffic that appears suspicious or malicious and determine whether the observed evidence is sufficient to classify it as malicious.
-
-## Benign Baseline
-
-I first generated normal ICMP traffic:
+### Baseline
 
 ```bash
 ping -c 10 10.0.2.2
 ```
 
-Example packet:
+This produced normal ICMP traffic and provided a comparison point for later observations.
 
-```text
-10.0.2.15 → 10.0.2.2
-ICMP Echo Request
-Length: 98 bytes
-TTL: 64
-```
+### HTTP User-Agent Testing
 
-This established a benign baseline.
-
-A key SOC lesson was that suspicious traffic should be evaluated against expected network behavior rather than automatically classified as malicious.
-
-## Controlled Suspicious HTTP Activity
-
-I generated HTTP traffic using:
+I generated normal HTTP traffic and then changed the HTTP User-Agent:
 
 ```bash
 curl http://example.com
 ```
 
-I then modified the HTTP User-Agent:
-
 ```bash
 curl -A "Mozilla/5.0" http://example.com
+```
+
+```bash
 curl -A "sqlmap/1.8" http://example.com
 ```
 
-The captured HTTP request contained:
+The significant observation was:
 
 ```text
 User-Agent: sqlmap/1.8
 ```
 
-## Analyst Interpretation
+The `sqlmap/1.8` User-Agent is a security-relevant indicator because SQLmap is a tool used for automated SQL injection testing.
 
-`sqlmap` is associated with SQL injection testing.
-
-The User-Agent therefore represents a useful security indicator.
-
-However:
-
-```text
-IOC ≠ Confirmed Compromise
-```
-
-The User-Agent is controlled by the client and can be deliberately changed.
-
-Therefore, the correct SOC approach is:
-
-```text
-Indicator
-   ↓
-Investigate
-   ↓
-Correlate
-   ↓
-Determine Context
-   ↓
-Verdict
-```
-
-## Verdict
-
-**Suspicious / security-relevant traffic generated intentionally in the lab.**
-
-The evidence does not independently prove compromise.
+The important SOC distinction is that an indicator does not automatically mean compromise. The traffic demonstrated a suspicious tool identifier in the HTTP request, but it did not by itself prove that an attack succeeded.
 
 ---
 
 # Investigation 2 — DNS Tunnelling
 
-## Objective
+I first established normal DNS behaviour and then generated repeated and encoded-looking DNS queries.
 
-Investigate DNS traffic for characteristics that could indicate DNS tunnelling.
-
-## Normal DNS Baseline
-
-I generated a normal DNS query:
+### Baseline DNS
 
 ```bash
 dig example.com
 ```
 
-Observed:
-
-```text
-Source:      10.0.2.15
-Destination: 192.168.0.1
-Source Port: 50290
-Destination: 53
-Query:       example.com
-Type:        A
-```
-
-Port `53` identified the traffic as DNS.
-
-## Repeated Subdomain Queries
-
-I generated multiple queries:
+### Repeated Subdomain Queries
 
 ```bash
 for i in {1..20}; do dig "data$i.example.com"; done
 ```
 
-The capture showed multiple DNS queries and responses.
-
-## Random-Looking DNS Labels
-
-I then generated random-looking labels:
+### Random-Looking Labels
 
 ```bash
 for i in {1..10}; do dig "$(head -c 12 /dev/urandom | xxd -p).example.com"; done
 ```
 
-Example:
+An example of the generated label was:
 
 ```text
 55fb6c4a67d7ce955b5aa295.example.com
 ```
 
-The label was:
+The changing, encoded-looking labels demonstrated characteristics that can be associated with DNS tunnelling.
 
-* Long
-* Hexadecimal-looking
-* Random
-* Different from the other generated labels
-
-## Analyst Interpretation
-
-A single random-looking DNS label is **not sufficient evidence of DNS tunnelling**.
-
-A stronger DNS tunnelling hypothesis would involve characteristics such as:
-
-* Large numbers of unique subdomains
-* High-entropy/random-looking labels
-* Long encoded-looking labels
-* Sustained query volume
-* Repeated communication with the same parent domain
-* Data-like information embedded in DNS labels
-* Unusual query frequency
-
-The investigation demonstrated the **indicators that an analyst would investigate**, rather than falsely classifying normal DNS traffic as tunnelling.
-
-## Verdict
-
-**Controlled DNS-tunnelling-like traffic characteristics demonstrated.**
-
-No real malicious DNS tunnel was deployed.
+The controlled traffic did not constitute proof of a real DNS tunnel. The exercise was intended to develop the ability to recognize characteristics that would justify further investigation in a real environment.
 
 ---
 
 # Investigation 3 — Port Scanning
 
-## Objective
-
-Identify and analyze TCP SYN scanning behavior.
-
-## Nmap Scan
-
-I generated a controlled SYN scan:
+I used Nmap to generate TCP SYN reconnaissance traffic against the controlled target.
 
 ```bash
 sudo nmap -sS -p 1-1000 10.0.2.2
 ```
 
-## Wireshark Filter
+In Wireshark I examined TCP SYN packets using:
 
 ```text
 tcp.flags.syn == 1 && tcp.flags.ack == 0
 ```
 
-The capture contained approximately 500 SYN packets.
+The capture showed a large number of SYN packets with rapidly changing destination ports.
 
-The destination ports changed rapidly.
-
-Example:
-
-```text
-10.0.2.15:47065
-        ↓ SYN
-10.0.2.2:554
-```
-
-The packet contained:
-
-```text
-Flags: 0x002
-SYN: Set
-ACK: Not set
-```
-
-## SYN/ACK Response Analysis
-
-I then used:
+I then examined SYN/ACK responses:
 
 ```text
 tcp.flags.syn == 1 && tcp.flags.ack == 1
 ```
 
-Approximately 10 SYN/ACK responses were observed.
+The responses showed which probed ports were accepting connections.
 
-Example:
-
-```text
-10.0.2.15:47065 → 10.0.2.2:445
-SYN
-
-10.0.2.2:445 → 10.0.2.15:47065
-SYN/ACK
-```
-
-Port `445` is associated with SMB.
-
-## Analyst Interpretation
-
-The combination of:
-
-* Large number of SYN packets
-* Rapidly changing destination ports
-* Small number of SYN/ACK responses
-
-is characteristic of TCP SYN port scanning.
-
-The behavior would be a significant SOC detection opportunity if observed unexpectedly from an internal endpoint.
-
-Because I intentionally generated the scan with Nmap, the activity was known to be benign laboratory activity.
-
-## Verdict
-
-**TCP SYN port scanning / network reconnaissance detected.**
-
-Classification:
-
-**Benign — intentionally generated in the lab.**
+This demonstrated how a SOC analyst can identify TCP SYN scanning by looking for a large number of connection attempts across different destination ports within a short period.
 
 ---
 
 # Investigation 4 — C2 Communication
 
-## Objective
+I created a controlled TCP communication channel between Kali and Metasploitable2.
 
-Identify controlled command-and-control-style communication and analyze the network evidence.
-
-## Lab Configuration
-
-The isolated laboratory network was:
-
-```text
-Kali:
-192.168.56.103
-
-Metasploitable:
-192.168.56.101
-```
-
-Metasploitable was configured with a Netcat listener:
+### Listener
 
 ```bash
 nc -lvnp 4444
 ```
 
-Kali then generated a controlled check-in:
+### Controlled Check-In
 
 ```bash
 echo "CHECKIN-01" | nc -w 2 192.168.56.101 4444
 ```
 
-## Wireshark Filter
+I examined the traffic in Wireshark using:
 
 ```text
 ip.addr == 192.168.56.101 && tcp.port == 4444
 ```
 
-The filtered capture contained the TCP connection establishment followed by application data.
+The traffic showed the TCP three-way handshake followed by a PSH+ACK packet carrying application data.
 
-## TCP Handshake
-
-The connection demonstrated:
-
-```text
-Kali → Metasploitable
-SYN
-
-Metasploitable → Kali
-SYN/ACK
-
-Kali → Metasploitable
-ACK
-```
-
-## C2 Check-In Packet
-
-The application-data packet showed:
-
-```text
-Source:      192.168.56.103
-Destination: 192.168.56.101
-Destination Port: 4444
-Flags:       PSH + ACK
-TCP Payload: 11 bytes
-```
-
-The captured payload was:
+The payload was 11 bytes:
 
 ```text
 434845434b494e2d30310a
 ```
 
-Hexadecimal decoding produced:
+The hexadecimal data decoded to:
 
 ```text
 CHECKIN-01
 ```
 
-The final byte:
+The final `0A` represented the newline character.
 
-```text
-0A
-```
+The server acknowledged the data with an ACK. The acknowledgement value of 12 indicated that the 11 bytes sent by the client had been received and that byte 12 was the next expected byte.
 
-represents a newline character.
-
-Therefore the complete payload was:
-
-```text
-CHECKIN-01\n
-```
-
-## Server Response Analysis
-
-The reverse-direction packet was:
-
-```text
-192.168.56.101:4444
-        ↓
-192.168.56.103:47348
-```
-
-The packet showed:
-
-```text
-Flags: 0x010
-ACK
-TCP Segment Len: 0
-```
-
-The acknowledgment number was:
-
-```text
-Ack: 12
-```
-
-The client had transmitted 11 bytes.
-
-Therefore:
-
-```text
-Initial sequence number
-1
-+
-Payload
-11
-=
-Next expected byte
-12
-```
-
-This confirmed that the server acknowledged receipt of the complete check-in payload.
-
-Importantly, the reverse packet did **not** contain an application payload.
-
-Therefore, the capture demonstrated a **C2-style check-in**, but did not demonstrate command execution or a server-to-client command payload.
-
-## Analyst Interpretation
-
-The observed behavior can be represented as:
-
-```text
-Client
-192.168.56.103
-      |
-      | TCP connection
-      |
-      | CHECKIN-01
-      ↓
-Server / Listener
-192.168.56.101:4444
-      |
-      | ACK
-      ↓
-Client
-```
-
-Security-relevant characteristics included:
-
-* Persistent TCP communication endpoint
-* Unusual port `4444`
-* Explicit client check-in message
-* Application data following TCP establishment
-* Controlled client/server relationship
-
-However, because the traffic was intentionally generated inside the isolated lab, the correct classification was **benign laboratory C2-style traffic**.
-
-## Verdict
-
-**Controlled C2-style check-in demonstrated.**
-
-No real malware or external C2 infrastructure was used.
-
-No command execution was demonstrated.
+There was no server-to-client application payload and no command execution. The exercise therefore demonstrated the network characteristics of a controlled C2-style check-in without creating an actual malicious C2 session.
 
 ---
 
-# Investigation Status
+# Investigation 5 — Suspicious HTTP and Live Frame Correlation
 
-| Investigation        | Status   |
-| -------------------- | -------- |
-| 1. Malicious Traffic | COMPLETE |
-| 2. DNS Tunnelling    | COMPLETE |
-| 3. Port Scanning     | COMPLETE |
-| 4. C2 Communication  | COMPLETE |
-| 5. Suspicious HTTP   | PENDING  |
+I used the Metasploitable2 web server to establish an internal HTTP baseline.
 
-## Day 3 Progress
-
-```text
-[✓] Malicious Traffic
-[✓] DNS Tunnelling
-[✓] Port Scanning
-[✓] C2 Communication
-[ ] Suspicious HTTP
+```bash
+curl http://192.168.56.101/
 ```
 
-Day 3 is therefore **partially complete**.
+The returned page exposed directories including:
 
-I am deliberately leaving Investigation 5 open rather than documenting an investigation that has not yet been properly studied and completed.
+```text
+/twiki/
+/phpMyAdmin/
+/mutillidae/
+/dvwa/
+/dav/
+```
+
+I then captured the HTTP communication directly with tcpdump:
+
+```bash
+sudo tcpdump -i eth1 -n 'tcp port 80 or tcp port 22' -c 10
+```
+
+The captured exchange showed:
+
+1. TCP SYN from `192.168.56.103` to `192.168.56.101:80`
+2. SYN/ACK response
+3. TCP ACK completing the handshake
+4. HTTP GET request for `/`
+5. TCP ACK from the server
+6. HTTP `200 OK` response
+7. Client acknowledgement
+8. Additional HTTP data
+9. Client acknowledgement
+10. TCP FIN from the client
+
+The HTTP GET and response could therefore be correlated directly with the underlying TCP session.
+
+This provided a practical baseline for understanding how an analyst can move from a network connection to the application-layer activity occurring inside that connection.
 
 ---
 
-# SOC Analyst Lessons Learned
+# Investigation 6 — Suspicious TLS
 
-This practical work reinforced several important SOC principles:
+I first established normal TLS behaviour:
 
-### 1. Suspicious does not automatically mean malicious
-
-Traffic must be examined in context.
-
-### 2. Baselines matter
-
-Normal traffic provides a comparison point for abnormal behavior.
-
-### 3. Packet fields provide evidence
-
-Important fields include:
-
-* Source IP
-* Destination IP
-* Source port
-* Destination port
-* TCP flags
-* Sequence numbers
-* Acknowledgment numbers
-* Payload length
-* Application payload
-* Timing
-* Communication frequency
-
-### 4. Payload inspection is critical
-
-The C2 investigation demonstrated that packet metadata alone was not enough.
-
-The actual payload:
-
-```text
-CHECKIN-01
+```bash
+curl -v https://example.com
 ```
 
-provided the strongest evidence that an application-layer check-in had occurred.
+The connection successfully negotiated TLS 1.3 and the certificate was verified normally.
 
-### 5. IOCs require investigation
+I then repeated the connection while disabling certificate verification:
 
-An indicator such as:
-
-```text
-User-Agent: sqlmap/1.8
+```bash
+curl -vk https://example.com
 ```
 
-should trigger investigation and correlation, not an automatic declaration of compromise.
-
-### 6. Controlled lab traffic can reproduce attacker behavior safely
-
-The investigations demonstrated:
+The output included:
 
 ```text
-Malicious-looking traffic
-DNS tunnelling characteristics
-Port scanning
-C2-style communication
+SSL Trust: peer verification disabled
 ```
 
-without deploying real malware or connecting to real malicious infrastructure.
-
-# Conclusion
-
-Day 3 moved the investigation process beyond basic protocol identification into practical SOC analysis.
-
-I successfully investigated:
-
-1. Malicious-looking traffic
-2. DNS tunnelling characteristics
-3. TCP SYN port scanning
-4. C2-style communication
-
-The investigations demonstrated how a SOC analyst can move from:
+and:
 
 ```text
-Packet
-   ↓
-Network behavior
-   ↓
-Evidence
-   ↓
-Context
-   ↓
-Analysis
-   ↓
-Verdict
+OpenSSL verify result: 14
 ```
 
-Investigation 5, **Suspicious HTTP**, remains pending and will be completed after studying the HTTP protocol sufficiently to perform the investigation correctly.
+followed by:
 
-**Day 3 should not be marked fully complete until Investigation 5 is finished.**
+```text
+SSL certificate verification failed, continuing anyway!
+```
+
+The TLS connection itself remained functional and used TLS 1.3.
+
+The important observation was that certificate verification had been deliberately disabled. This is a security-relevant client behaviour, but it does not by itself prove a man-in-the-middle attack.
+
+During packet analysis, Wireshark showed TLS 1.3 handshake/application traffic such as Client Hello, Server Hello, Change Cipher Spec and Application Data. TLS 1.3 encrypts much of the handshake, so the complete certificate exchange was not necessarily visible in the capture without the appropriate session keys.
+
+---
+
+# Investigation 7 — Beaconing
+
+I generated repeated HTTPS connections at controlled intervals:
+
+```bash
+for i in {1..6}; do curl -s https://example.com > /dev/null; sleep 5; done
+```
+
+I examined the traffic using:
+
+```text
+tcp.port == 443
+```
+
+The capture contained repeated HTTPS communication with the same destination at approximately five-second intervals.
+
+The repeated sessions generated many TLS packets because each HTTPS connection contains multiple TCP, TLS and application-layer packets.
+
+I observed activity around approximately:
+
+```text
+5 seconds
+10 seconds
+15 seconds
+```
+
+The regular timing demonstrated why periodic network communication can be an important SOC indicator.
+
+The individual packets within one HTTPS connection should not be counted as separate beacons. A single connection can contain several packets.
+
+The exercise demonstrated a **beaconing-like pattern**. Periodic traffic alone does not prove malicious command-and-control activity.
+
+---
+
+# Investigation 8 — Network Reconnaissance
+
+I generated controlled reconnaissance traffic against Metasploitable2:
+
+```bash
+sudo nmap -sS -p 21,22,23,25,53,80 192.168.56.101
+```
+
+I examined the SYN probes using:
+
+```text
+tcp.flags.syn == 1 && tcp.flags.ack == 0 && ip.addr == 192.168.56.101
+```
+
+The capture showed six consecutive TCP SYN probes.
+
+The packets had:
+
+* The same source IP
+* The same destination IP
+* Different destination ports
+* Consistent packet characteristics
+* SYN set
+* Consistent sequence behaviour
+
+The repeated probes against different ports demonstrated systematic service discovery against the target.
+
+This investigation moved beyond simply identifying TCP SYN packets and demonstrated how their repetition and variation can reveal reconnaissance behaviour.
+
+---
+
+# Investigation 9 — Traffic Correlation
+
+I then combined several activities into one capture so that the events could be viewed as a sequence rather than as isolated packets.
+
+### Event 1 — Host Reachability
+
+```bash
+ping -c 2 192.168.56.101
+```
+
+### Event 2 — Service Probing
+
+```bash
+sudo nmap -sS -p 22,80 192.168.56.101
+```
+
+### Event 3 — HTTP Interaction
+
+```bash
+curl http://192.168.56.101/
+```
+
+I filtered the capture with:
+
+```text
+ip.addr == 192.168.56.101
+```
+
+The capture showed:
+
+* ICMP
+* TCP
+* HTTP
+* Browser
+
+The **Browser** protocol label in Wireshark refers to the Microsoft/NetBIOS Computer Browser protocol, not a generic web browser.
+
+The important correlation was the sequence of activity:
+
+```text
+ICMP
+  ↓
+Host reachability
+  ↓
+TCP SYN probes
+  ↓
+Service reconnaissance
+  ↓
+HTTP GET
+  ↓
+Application interaction
+```
+
+The tcpdump capture provided direct evidence of the HTTP connection. The TCP exchange began with the SYN/SYN-ACK/ACK handshake, followed by the HTTP GET request and the server's `HTTP/1.1 200 OK` response.
+
+This demonstrated how a SOC analyst can correlate different protocols and events involving the same host to understand the progression of activity.
+
+The traffic was generated deliberately within the controlled lab environment. The value of the exercise was learning the investigation method: identify individual events, establish their timing and relationship, and then interpret them together as a sequence of behaviour.
+
+---
+
+# Day 3 Summary
+
+Day 3 moved my analysis from individual packet and protocol fields into practical network investigation.
+
+I worked with controlled examples of:
+
+* Malicious or security-relevant traffic indicators
+* DNS tunnelling characteristics
+* TCP SYN port scanning
+* C2-style communication
+* Suspicious HTTP indicators
+* TLS trust-handling behaviour
+* Periodic beaconing-like traffic
+* Network reconnaissance
+* Multi-event traffic correlation
+
+The main progression was from **observing packets** to **interpreting communication behaviour and relationships between events**.
+
+The final investigation in the SOC roadmap is **PCAP-Based Incident Investigation**, where I will apply these skills to an investigation using a packet capture as the primary evidence source.
