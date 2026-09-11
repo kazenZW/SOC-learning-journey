@@ -404,3 +404,187 @@ I worked with controlled examples of:
 The main progression was from **observing packets** to **interpreting communication behaviour and relationships between events**.
 
 The final investigation in the SOC roadmap is **PCAP-Based Incident Investigation**, where I will apply these skills to an investigation using a packet capture as the primary evidence source.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# PCAP-Based Incident Investigation
+
+## Objective
+
+I investigated a previously captured PCAP file to practice identifying relevant network activity, filtering traffic, and separating potentially suspicious behaviour from normal network communication.
+
+The objective was not simply to identify individual packets, but to begin approaching a PCAP as an incident-investigation dataset.
+
+## Investigation File
+
+I worked with:
+
+```text
+investigation10.pcap
+```
+
+The investigation focused on traffic involving:
+
+```text
+192.168.56.103
+```
+
+This address belonged to the controlled lab environment.
+
+## Initial PCAP Filtering
+
+I used `tcpdump` to read the capture without generating new traffic:
+
+```bash
+sudo tcpdump -nn -r investigation10.pcap 'host 192.168.56.103 and not tcp'
+```
+
+### What the command does
+
+* `-nn` prevents hostname and service-name resolution.
+* `-r investigation10.pcap` reads an existing PCAP file instead of capturing live traffic.
+* `host 192.168.56.103` limits the output to packets involving the selected host.
+* `and not tcp` excludes TCP traffic so I can concentrate on non-TCP protocols.
+
+This allowed me to narrow the investigation instead of manually reviewing every packet in the capture.
+
+## Observed ARP Activity
+
+The filtered output included:
+
+```text
+09:47:54.578051 ARP, Request who-has 192.168.56.101 tell 192.168.56.103, length 28
+```
+
+This showed that:
+
+```text
+192.168.56.103
+        |
+        | ARP Request
+        v
+"Who has 192.168.56.101?"
+```
+
+The host `192.168.56.103` was therefore attempting to resolve the Layer-2 address associated with `192.168.56.101`.
+
+## Investigation Interpretation
+
+I did not treat the ARP request as malicious by itself.
+
+ARP requests are normal network behaviour and can occur when a host needs to communicate with another device on the local network.
+
+The SOC-relevant question is therefore not:
+
+```text
+ARP = suspicious
+```
+
+but:
+
+```text
+Why did this host communicate with this destination?
+Was the communication expected?
+How frequently did it occur?
+What other traffic occurred around the same time?
+```
+
+This is an important distinction between packet identification and incident investigation.
+
+## Why Filtering Matters
+
+The investigation demonstrated that a large PCAP can be reduced into smaller investigative views.
+
+For example:
+
+```text
+Full PCAP
+   |
+   +-- Host filter
+   |
+   +-- Protocol filter
+   |
+   +-- Time correlation
+   |
+   +-- Packet inspection
+   |
+   v
+Relevant evidence
+```
+
+Filtering is therefore an investigative technique rather than simply a way of making Wireshark or tcpdump easier to read.
+
+## Evidence-Based Analysis
+
+During the investigation I avoided treating a single unusual packet as proof of compromise.
+
+Instead, I considered:
+
+* Source and destination IP addresses
+* Protocol
+* Ports where applicable
+* Packet frequency
+* Timing
+* Communication direction
+* Relationship with other packets
+* Whether the activity was expected in the lab environment
+
+This reinforced an important SOC principle:
+
+> A suspicious indicator requires context before it can be classified as malicious.
+
+## Practical Lesson
+
+I learned that PCAP investigation is different from simply learning protocol headers.
+
+Protocol analysis asks:
+
+```text
+What does this packet contain?
+```
+
+Incident investigation asks:
+
+```text
+What does this packet mean in the context of the wider communication?
+```
+
+The second question is more important when working as a SOC analyst.
+
+## Investigation Status
+
+This exercise strengthened my ability to:
+
+* Read an existing PCAP with `tcpdump`
+* Filter traffic by host
+* Exclude a protocol from an investigation
+* Identify ARP activity
+* Interpret an ARP request
+* Distinguish normal network behaviour from evidence requiring further investigation
+* Use packet context rather than relying on a single indicator
+* Approach PCAP analysis as an incident-investigation workflow
+
+## Conclusion
+
+The PCAP investigation moved my training from individual protocol analysis toward practical incident investigation.
+
+I am now beginning to analyse network captures as collections of related events rather than isolated packets.
+
+The next stage is to continue correlating traffic across protocols, hosts, timestamps and communication patterns to determine whether apparently unusual activity represents normal behaviour, reconnaissance, command-and-control activity, or another form of suspicious network activity.
+
