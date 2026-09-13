@@ -597,6 +597,7 @@ The next stage is to continue correlating traffic across protocols, hosts, times
 
 
 
+
 ## 10. Incident Investigation and Log Analysis
 
 ### 10.1 Linux Log Analysis
@@ -639,7 +640,7 @@ The purpose was not to assume that every matching entry represented an attack. T
 
 I used the Linux journal to look for evidence of authentication-related failures.
 
-The search did not produce a useful failed-authentication record for the activity being investigated. Therefore, I did not treat the absence of a useful matching entry as proof that no authentication activity occurred.
+The search did not initially produce a useful failed-authentication record for the activity being investigated. Therefore, I did not treat the absence of a useful matching entry as proof that no authentication activity occurred.
 
 Instead, this demonstrated an important investigation principle: **the available telemetry determines what can and cannot be established from the evidence.**
 
@@ -649,17 +650,103 @@ At this stage, I had established the basic Linux log-analysis workflow:
 
 #### 10.1.5 Linux Log Analysis — Session Conclusion
 
-The Linux portion of this session established the foundation for working with system logs and using `journalctl` to locate authentication-related activity.
+The Linux portion of the initial log-analysis work established the foundation for working with system logs and using `journalctl` to locate authentication-related activity.
 
-I did not continue into a full Linux authentication investigation during this session. The deeper authentication investigation is therefore left for the next session rather than being presented as completed work.
+I then continued the investigation specifically into Linux authentication events before moving to Windows.
 
-**Linux log-analysis status: Completed to the authentication-log investigation boundary.**
+#### 10.1.6 Linux Authentication Log Analysis
+
+I continued my SOC log-analysis training by examining Linux authentication events. The objective was to identify authentication failures, successful authentication, session creation, and whether the activity was local or remote.
+
+##### Searching Authentication Events
+
+I searched the current boot journal for authentication-related activity:
+
+```bash
+sudo journalctl -b | grep -Ei 'sudo|authentication|failed|session'
+```
+
+Initially, there was no recorded failed authentication event in the output.
+
+I then generated a `sudo` authentication event and searched the journal again:
+
+```bash
+sudo journalctl -b | grep -Ei 'sudo|authentication|session' | tail -20
+```
+
+The important event was:
+
+```text
+pam_unix(sudo:auth): authentication failure;
+logname=kali uid=1000 euid=0 tty=/dev/pts/0
+ruser=kali rhost= user=kali
+```
+
+##### Interpreting the Authentication Failure
+
+I identified this as a **local sudo authentication failure** involving the `kali` user.
+
+The important fields were:
+
+* `user=kali` — the account involved
+* `ruser=kali` — the requesting user
+* `tty=/dev/pts/0` — the terminal involved
+* `rhost=` — empty, meaning no remote host was recorded
+* `pam_unix(sudo:auth)` — the authentication was handled through PAM for `sudo`
+
+I did not classify this as a remote attack because the event contained no remote host.
+
+I also did not assume why authentication failed because the log did not provide enough evidence to determine the exact reason.
+
+##### Successful sudo Authentication
+
+I then observed a successful sudo session:
+
+```text
+pam_unix(sudo:session): session opened for user root(uid=0) by kali(uid=1000)
+```
+
+The corresponding session later closed:
+
+```text
+pam_unix(sudo:session): session closed for user root
+```
+
+This showed that the `kali` user successfully authenticated through `sudo` and obtained a root session.
+
+##### SOC Assessment
+
+My assessment was:
+
+**Local authentication activity — no evidence of a confirmed attack.**
+
+The failed authentication was associated with the local `kali` account and did not contain a remote source address. A successful sudo session followed.
+
+The important SOC lesson was that an authentication failure is an **event requiring context**, not automatically an incident.
+
+I learned to distinguish:
+
+```text
+Authentication failure
+        ↓
+Security-relevant event
+        ↓
+Investigate context
+        ↓
+Do not automatically classify as an attack
+```
+
+I also learned that PAM records authentication and session activity for Linux services such as `sudo`.
+
+### Linux Authentication Status
+
+**Completed.**
 
 ---
 
 ### 10.2 Windows Authentication Log Investigation
 
-After completing the Linux log-analysis portion, I moved to Windows Security event logs to investigate failed authentication activity.
+After completing the Linux authentication investigation, I moved to Windows Security event logs to investigate failed authentication activity.
 
 #### 10.2.1 Event ID 4625 — Failed Logon
 
@@ -796,6 +883,9 @@ I learned to:
 * Use `journalctl` to examine Linux system logs.
 * Filter logs for relevant authentication-related activity.
 * Recognize when available telemetry is insufficient to answer an investigation question.
+* Investigate Linux authentication failures and successful sessions.
+* Distinguish local authentication activity from remote authentication activity.
+* Understand the role of PAM in Linux authentication and session logging.
 * Query Windows Security logs for Event ID 4625.
 * Reduce excessive event output to a manageable set for analysis.
 * Distinguish a local loopback address from a remote source.
@@ -805,13 +895,6 @@ I learned to:
 * Use status and sub-status values to determine the specific authentication failure.
 * Recognize repeated events as a pattern without automatically classifying them as malicious.
 * Separate established facts from questions requiring further investigation.
-
-
-
-
-
-
-
 
 
 
