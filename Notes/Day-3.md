@@ -897,6 +897,124 @@ I learned to:
 * Separate established facts from questions requiring further investigation.
 
 
+# Windows Log Analysis — Final Practical Assessment
+
+## Practical Windows Authentication Investigation
+
+I completed a practical investigation using Windows Security Event Log evidence to determine what happened, distinguish normal system activity from potentially suspicious activity, and identify what additional evidence would be required.
+
+### 1. Event ID 4625 — Failed Logon
+
+The 4625 event showed a failed authentication attempt involving the `lenovo` account.
+
+Evidence:
+
+* Event ID: `4625`
+* Logon Type: `2` — Interactive
+* Account for which logon failed: `lenovo`
+* Failure reason: `Unknown user name or bad password`
+* SubStatus: `0xC000006A`
+* Caller process: `C:\Windows\System32\svchost.exe`
+* Source Network Address: `127.0.0.1`
+* Workstation: `KAZEN-ZW`
+
+The source address was the local loopback address, so the evidence did not indicate a remote authentication source. The failure was consistent with a bad password.
+
+I did not classify the event as malicious because the available evidence did not establish malicious intent or compromise.
+
+### 2. Event ID 4624 — Successful Logon
+
+The 4624 event showed a successful authentication in a service/system context.
+
+Important evidence included:
+
+* Account: `SYSTEM`
+* Logon Type: `5` — Service
+* Process: `services.exe`
+* Source network address: blank
+
+This was not evidence of a user remotely logging into the machine. The Logon Type and process context were consistent with Windows service activity.
+
+### 3. Event ID 4688 — Process Creation
+
+The 4688 event showed:
+
+* New process: `services.exe`
+* Creator process: `wininit.exe`
+
+I interpreted this as normal Windows operating-system activity. `wininit.exe` creating `services.exe` is consistent with Windows startup and service initialization.
+
+There was no evidence in this event alone indicating malicious process creation.
+
+### 4. Event ID 4740 — Account Lockout
+
+I searched for Event ID `4740` and did not find a matching account-lockout event.
+
+The absence of 4740 does **not** mean that no failed authentication occurred, because a 4625 event was observed. It means that no account-lockout event was recorded in the evidence examined.
+
+Therefore, I found no evidence that the failed authentication resulted in an account lockout.
+
+### 5. Correlation and Timeline
+
+I compared the authentication and process events rather than treating each event independently.
+
+The 4625 event represented a local interactive authentication failure.
+
+The later 4624 event represented a successful service logon involving `SYSTEM`, followed by a 4688 process-creation event showing `wininit.exe` creating `services.exe`.
+
+Although the events occurred relatively close together in time, their different logon types, accounts, and process contexts did not provide enough evidence to establish that they were part of the same authentication sequence.
+
+### 6. Final Investigation Conclusion
+
+Based on the available evidence, I classified the activity as **benign/expected system activity with one observed local authentication failure**.
+
+I found:
+
+* A local failed interactive authentication attempt.
+* No evidence of a remote authentication source.
+* A successful service/system logon.
+* Normal `wininit.exe → services.exe` process creation.
+* No observed account-lockout event.
+* No evidence sufficient to establish malicious activity.
+
+I therefore did **not** escalate the activity as a confirmed security incident.
+
+### Student Assessment Result
+
+**PASS**
+
+I demonstrated the ability to:
+
+* Interpret Windows authentication events.
+* Distinguish Logon Types.
+* Identify local versus remote authentication evidence.
+* Interpret failed and successful authentication.
+* Investigate account-lockout evidence.
+* Interpret process-creation events.
+* Correlate multiple Windows Security events.
+* Separate observed evidence from assumptions.
+* Avoid declaring an incident without sufficient evidence.
+
+## Windows Log Analysis — Module Status
+
+**COMPLETE**
+
+The Windows Log Analysis objectives are now satisfied.
+
+### Next SOC Module
+
+**SIEM**
+
+Planned progression:
+
+1. SIEM fundamentals
+2. Search and filtering
+3. Event searching
+4. Field-based investigation
+5. Correlation
+6. Alert generation
+7. Alert investigation
+8. Practical SIEM investigation
 
 
 
