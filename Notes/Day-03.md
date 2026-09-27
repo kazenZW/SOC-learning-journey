@@ -1020,3 +1020,85 @@ Planned progression:
 
 
 
+
+# SIEM Theory — Basic Understanding
+
+## What is a SIEM?
+
+A **SIEM (Security Information and Event Management)** is a system used to **collect, centralize, search and analyze security-related logs and events** from different systems.
+
+Instead of checking every machine separately, a SIEM provides a central place where an analyst can examine activity.
+
+## Why is a SIEM used?
+
+Systems generate large amounts of logs. A SIEM helps an analyst:
+
+* Bring logs from different systems into one place.
+* Search through large amounts of events.
+* Filter events to find relevant activity.
+* Examine events using their fields and timestamps.
+* Identify relationships and patterns between events.
+
+## Logs and Events
+
+A **log** is a record produced by a system, service or application.
+
+An **event** is an individual recorded occurrence within that data.
+
+Events can contain information such as:
+
+* Time
+* Host
+* User
+* Source
+* Event type
+* Source IP address
+* Action or result
+
+Understanding these fields allows an analyst to investigate activity more effectively.
+
+## Centralization
+
+The main idea behind a SIEM is centralization.
+
+For example:
+
+```text
+Windows ---------┐
+Linux -----------┤
+Servers ---------┼--> SIEM
+Applications ----┤
+Network ---------┘
+```
+
+The SIEM receives information from different sources and makes it available for centralized analysis.
+
+## Searching and Filtering
+
+Because a SIEM may contain thousands of events, an analyst normally starts by narrowing the data.
+
+For example, an analyst may search for:
+
+* A particular host
+* A username
+* Failed logins
+* A specific event type
+* A particular time period
+
+Filtering does not automatically mean that something is malicious. It simply helps isolate information that needs to be examined.
+
+## Basic SIEM Analysis
+
+The basic analytical process we learned is:
+
+```text
+Collect -> Search -> Filter -> Examine -> Correlate -> Investigate
+```
+
+The important idea is that **one event may not mean much by itself**. Looking at related events can provide the context needed to understand what actually happened.
+
+## Core Understanding
+
+A SIEM is therefore more than a place to store logs.
+
+It provides a **centralized environment where security events can be searched and analyzed to understand activity across systems.**
