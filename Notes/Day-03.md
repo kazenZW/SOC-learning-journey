@@ -1102,3 +1102,405 @@ The important idea is that **one event may not mean much by itself**. Looking at
 A SIEM is therefore more than a place to store logs.
 
 It provides a **centralized environment where security events can be searched and analyzed to understand activity across systems.**
+
+
+
+
+
+
+
+
+
+
+
+
+# Windows Log Analysis — Splunk Progress
+
+## Current Stage
+
+**Windows Security Log Analysis → Process Creation → Persistence Investigation**
+
+My objective is to investigate Windows activity in Splunk using evidence and event correlation rather than treating individual events as proof of compromise.
+
+---
+
+# PART I — CONFIRMED FINDINGS
+
+## 1. Windows Security Log Collection
+
+I confirmed that Windows Security logs were previously being successfully ingested into Splunk.
+
+My main search was:
+
+```spl id="x1w2m3"
+index=main sourcetype="WinEventLog:Security"
+```
+
+Earlier searches returned thousands of Security events.
+
+Event IDs I confirmed as present included:
+
+* **4624** — successful logon
+* **4625** — failed logon
+* **4672** — special privileges assigned
+* **4688** — process creation
+* **4696** — primary token assigned to process
+* **4826** — Boot Configuration Data loaded
+
+---
+
+## 2. Event 4688 — Process Creation
+
+I investigated Event 4688 using:
+
+```spl id="a4b5c6"
+index=main sourcetype="WinEventLog:Security" EventCode=4688
+| table _time Account_Name New_Process_Name Creator_Process_Name Process_Command_Line
+| sort _time
+```
+
+I found approximately **45 Event 4688 records**.
+
+Observed processes included:
+
+```text
+smss.exe
+csrss.exe
+wininit.exe
+services.exe
+winlogon.exe
+lsass.exe
+Registry
+```
+
+### Confirmed field meanings
+
+`New_Process_Name` identifies the newly created process.
+
+`Creator_Process_Name` identifies the recorded creator/parent process.
+
+`Creator_Process_ID` and `New_Process_ID` allow process relationships to be correlated.
+
+A blank or `-` value does not automatically mean that something did not happen.
+
+For example:
+
+```text
+Process Command Line:
+```
+
+being empty means the command line was **not recorded in that event**.
+
+It does not prove that the process had no command line.
+
+---
+
+## 3. EventType Clarification
+
+I established that **EventType, EventCode, and Type are separate fields**.
+
+For Windows Security events:
+
+```text
+EventType=0 → Success Audit
+EventType=1 → Failure Audit
+```
+
+For the 4688 events I examined:
+
+```text
+EventType=0
+Keywords=Audit Success
+Type=Information
+TaskCategory=Process Creation
+```
+
+Therefore, `EventType=0` does not mean "Information."
+
+`Type=Information` is a separate field.
+
+I also established that System/Application EventType values must not automatically be interpreted using the Security-log EventType scheme.
+
+---
+
+## 4. LSASS Event
+
+I examined a specific 4688 event:
+
+```text
+New Process Name:
+C:\Windows\System32\lsass.exe
+
+Creator Process Name:
+C:\Windows\System32\wininit.exe
+
+New Process ID:
+0x498
+
+Creator Process ID:
+0x408
+```
+
+The raw event contained:
+
+```text
+Process Command Line:
+```
+
+with no value.
+
+### Confirmed conclusion
+
+> LSASS was created by wininit.exe, but the command line was not recorded in this event.
+
+I did not conclude that LSASS had no command line.
+
+---
+
+## 5. Boot/Reboot Correlation
+
+I correlated Windows Security and System events around:
+
+**2026-09-24 13:23–13:26**
+
+I confirmed a System Event 41:
+
+```text
+EventCode=41
+EventType=1
+SourceName=Microsoft-Windows-Kernel-Power
+Type=Critical
+```
+
+Message:
+
+> The system has rebooted without cleanly shutting down first.
+
+Other events occurring during the startup sequence included:
+
+* NTFS initialization
+* FilterManager startup
+* UMDF startup
+* Kernel-PnP activity
+* Security Event 4826
+* Security Event 4696
+* Security Event 4688
+* Windows startup processes
+
+Event 4826 showed that Boot Configuration Data had been loaded.
+
+The observed settings included:
+
+```text
+Test Signing: No
+Kernel Debugging: No
+Flight Signing: No
+Disable Integrity Checks: No
+```
+
+### Confirmed interpretation
+
+These observations establish that the 4688 process-creation events occurred in the context of Windows startup following an unclean reboot.
+
+They do **not** establish that the system is clean.
+
+---
+
+## 6. Registry Process Correlation
+
+I observed Event 4696 and Event 4688 associated with:
+
+```text
+PID = 0xac
+Process = Registry
+```
+
+Event 4696 indicated that a primary token was assigned to the process.
+
+Event 4688 indicated that the process was created.
+
+Because both events referenced PID `0xac`, I can correlate them directly.
+
+### Confirmed limitation
+
+Seeing a process named `Registry` is **not by itself evidence of registry persistence**.
+
+No registry-persistence conclusion has been made from that event alone.
+
+---
+
+## 7. Windows Service Persistence Check
+
+I investigated service-installation events:
+
+```text
+EventCode 4697
+EventCode 7045
+```
+
+I first searched around the reboot and received no results.
+
+I then searched the available dataset:
+
+```spl id="d7e8f9"
+index=main (EventCode=4697 OR EventCode=7045)
+| stats count by sourcetype EventCode
+```
+
+Result:
+
+**No results.**
+
+### Confirmed finding
+
+Event IDs 4697 and 7045 are not currently available in the searchable dataset.
+
+Therefore, I cannot use those events to investigate service installation from the current data.
+
+This does **not** prove:
+
+* that no services exist
+* that no service was installed
+* that service persistence did not occur
+
+It only establishes that these specific event records are not currently available to my search.
+
+---
+
+## 8. Current Splunk Data Problem
+
+After the service investigation, my previously working Security search returned no results:
+
+```spl id="g0h1i2"
+index=main sourcetype="WinEventLog:Security"
+```
+
+I tested:
+
+```spl id="j3k4l5"
+index=main
+| stats count
+```
+
+It returned:
+
+**1 event**
+
+I inspected that event and confirmed:
+
+```text
+host = KAZEN-ZW
+source = WinEventLog:System
+sourcetype = WinEventLog:System
+EventCode = 41
+```
+
+Timestamp:
+
+```text
+2026-09-24 13:23:42.395 +02:00
+```
+
+The event was the previously identified Kernel-Power Event 41.
+
+### Confirmed current state
+
+At the point the investigation was paused, searches against `main` were returning only this one System event instead of the thousands of Security events that had previously been searchable.
+
+I therefore stopped the persistence investigation rather than continuing with incomplete data.
+
+---
+
+# PART II — PLANNED NEXT STEPS
+
+## 1. Verify the Full `main` Index
+
+Run:
+
+```spl id="m6n7o8"
+index=main earliest=0 latest=now
+| stats count
+```
+
+### Purpose
+
+Determine whether `main` genuinely contains only one searchable event across the full available time range.
+
+---
+
+## 2. If `main` Still Contains Only One Event
+
+Investigate the Splunk data path.
+
+Specifically determine whether:
+
+* Windows Security events are still being forwarded.
+* Windows events are being sent to another index.
+* The Windows sourcetype changed.
+* The Windows input/forwarder stopped.
+* Splunk ingestion changed after a restart.
+* The Security data is unavailable to the current search for another reason.
+
+I will diagnose the cause before changing configuration.
+
+---
+
+## 3. Resume Persistence Investigation
+
+Once Windows Security data is confirmed to be searchable again, continue investigating persistence mechanisms.
+
+Potential mechanisms to investigate include:
+
+* Registry Run/RunOnce locations
+* Services
+* Scheduled Tasks
+* Winlogon-related persistence
+* Startup folders
+* Other Windows persistence mechanisms supported by the available telemetry
+
+The specific mechanism should be chosen based on the evidence actually available in Splunk.
+
+---
+
+## 4. Continue Correlation
+
+For suspicious activity, correlate:
+
+* Timestamp
+* Event ID
+* Process ID
+* Parent Process ID
+* Account
+* Logon ID
+* Process path
+* Command line
+* Registry activity
+* Service activity
+* Scheduled-task activity
+* Authentication events
+* System events
+* Network activity where available
+
+The goal is to build an evidence-based timeline rather than classify an individual event in isolation.
+
+---
+
+# INVESTIGATION METHOD
+
+For each finding, I use:
+
+1. **What happened?**
+2. **What does the field literally say?**
+3. **What can I infer?**
+4. **What can I NOT infer?**
+5. **What is the legitimate explanation?**
+6. **What malicious explanation is possible?**
+7. **What additional evidence would distinguish the possibilities?**
+8. **Correlate before concluding.**
+
+I do not classify an event as malicious or benign based on a single indicator.
+
+My objective is to build an evidence-based Windows investigation in Splunk and eventually correlate Windows, Linux, authentication, process, persistence, and network evidence.
+
+
+
