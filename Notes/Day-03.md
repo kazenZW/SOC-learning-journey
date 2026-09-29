@@ -1,4 +1,4 @@
-# Day 3 — Practical SOC Network Investigations
+﻿# Day 3 â€” Practical SOC Network Investigations
 
 ## Objective
 
@@ -28,7 +28,7 @@ The objective of Day 3 was to move from individual protocol analysis into practi
 
 ---
 
-# Investigation 1 — Malicious Traffic Analysis
+# Investigation 1 â€” Malicious Traffic Analysis
 
 I began with benign traffic to establish a baseline before generating controlled security-relevant traffic.
 
@@ -68,7 +68,7 @@ The important SOC distinction is that an indicator does not automatically mean c
 
 ---
 
-# Investigation 2 — DNS Tunnelling
+# Investigation 2 â€” DNS Tunnelling
 
 I first established normal DNS behaviour and then generated repeated and encoded-looking DNS queries.
 
@@ -102,7 +102,7 @@ The controlled traffic did not constitute proof of a real DNS tunnel. The exerci
 
 ---
 
-# Investigation 3 — Port Scanning
+# Investigation 3 â€” Port Scanning
 
 I used Nmap to generate TCP SYN reconnaissance traffic against the controlled target.
 
@@ -130,7 +130,7 @@ This demonstrated how a SOC analyst can identify TCP SYN scanning by looking for
 
 ---
 
-# Investigation 4 — C2 Communication
+# Investigation 4 â€” C2 Communication
 
 I created a controlled TCP communication channel between Kali and Metasploitable2.
 
@@ -174,7 +174,7 @@ There was no server-to-client application payload and no command execution. The 
 
 ---
 
-# Investigation 5 — Suspicious HTTP and Live Frame Correlation
+# Investigation 5 â€” Suspicious HTTP and Live Frame Correlation
 
 I used the Metasploitable2 web server to establish an internal HTTP baseline.
 
@@ -217,7 +217,7 @@ This provided a practical baseline for understanding how an analyst can move fro
 
 ---
 
-# Investigation 6 — Suspicious TLS
+# Investigation 6 â€” Suspicious TLS
 
 I first established normal TLS behaviour:
 
@@ -259,7 +259,7 @@ During packet analysis, Wireshark showed TLS 1.3 handshake/application traffic s
 
 ---
 
-# Investigation 7 — Beaconing
+# Investigation 7 â€” Beaconing
 
 I generated repeated HTTPS connections at controlled intervals:
 
@@ -293,7 +293,7 @@ The exercise demonstrated a **beaconing-like pattern**. Periodic traffic alone d
 
 ---
 
-# Investigation 8 — Network Reconnaissance
+# Investigation 8 â€” Network Reconnaissance
 
 I generated controlled reconnaissance traffic against Metasploitable2:
 
@@ -324,23 +324,23 @@ This investigation moved beyond simply identifying TCP SYN packets and demonstra
 
 ---
 
-# Investigation 9 — Traffic Correlation
+# Investigation 9 â€” Traffic Correlation
 
 I then combined several activities into one capture so that the events could be viewed as a sequence rather than as isolated packets.
 
-### Event 1 — Host Reachability
+### Event 1 â€” Host Reachability
 
 ```bash
 ping -c 2 192.168.56.101
 ```
 
-### Event 2 — Service Probing
+### Event 2 â€” Service Probing
 
 ```bash
 sudo nmap -sS -p 22,80 192.168.56.101
 ```
 
-### Event 3 — HTTP Interaction
+### Event 3 â€” HTTP Interaction
 
 ```bash
 curl http://192.168.56.101/
@@ -365,15 +365,15 @@ The important correlation was the sequence of activity:
 
 ```text
 ICMP
-  ↓
+  â†“
 Host reachability
-  ↓
+  â†“
 TCP SYN probes
-  ↓
+  â†“
 Service reconnaissance
-  ↓
+  â†“
 HTTP GET
-  ↓
+  â†“
 Application interaction
 ```
 
@@ -646,9 +646,9 @@ Instead, this demonstrated an important investigation principle: **the available
 
 At this stage, I had established the basic Linux log-analysis workflow:
 
-**Identify the relevant log source → filter the logs → examine the available evidence → determine whether the evidence answers the investigation question.**
+**Identify the relevant log source â†’ filter the logs â†’ examine the available evidence â†’ determine whether the evidence answers the investigation question.**
 
-#### 10.1.5 Linux Log Analysis — Session Conclusion
+#### 10.1.5 Linux Log Analysis â€” Session Conclusion
 
 The Linux portion of the initial log-analysis work established the foundation for working with system logs and using `journalctl` to locate authentication-related activity.
 
@@ -688,11 +688,11 @@ I identified this as a **local sudo authentication failure** involving the `kali
 
 The important fields were:
 
-* `user=kali` — the account involved
-* `ruser=kali` — the requesting user
-* `tty=/dev/pts/0` — the terminal involved
-* `rhost=` — empty, meaning no remote host was recorded
-* `pam_unix(sudo:auth)` — the authentication was handled through PAM for `sudo`
+* `user=kali` â€” the account involved
+* `ruser=kali` â€” the requesting user
+* `tty=/dev/pts/0` â€” the terminal involved
+* `rhost=` â€” empty, meaning no remote host was recorded
+* `pam_unix(sudo:auth)` â€” the authentication was handled through PAM for `sudo`
 
 I did not classify this as a remote attack because the event contained no remote host.
 
@@ -718,7 +718,7 @@ This showed that the `kali` user successfully authenticated through `sudo` and o
 
 My assessment was:
 
-**Local authentication activity — no evidence of a confirmed attack.**
+**Local authentication activity â€” no evidence of a confirmed attack.**
 
 The failed authentication was associated with the local `kali` account and did not contain a remote source address. A successful sudo session followed.
 
@@ -728,11 +728,11 @@ I learned to distinguish:
 
 ```text
 Authentication failure
-        ↓
+        â†“
 Security-relevant event
-        ↓
+        â†“
 Investigate context
-        ↓
+        â†“
 Do not automatically classify as an attack
 ```
 
@@ -748,7 +748,7 @@ I also learned that PAM records authentication and session activity for Linux se
 
 After completing the Linux authentication investigation, I moved to Windows Security event logs to investigate failed authentication activity.
 
-#### 10.2.1 Event ID 4625 — Failed Logon
+#### 10.2.1 Event ID 4625 â€” Failed Logon
 
 I investigated Windows Security Event ID **4625**, which represents a failed logon.
 
@@ -897,20 +897,20 @@ I learned to:
 * Separate established facts from questions requiring further investigation.
 
 
-# Windows Log Analysis — Final Practical Assessment
+# Windows Log Analysis â€” Final Practical Assessment
 
 ## Practical Windows Authentication Investigation
 
 I completed a practical investigation using Windows Security Event Log evidence to determine what happened, distinguish normal system activity from potentially suspicious activity, and identify what additional evidence would be required.
 
-### 1. Event ID 4625 — Failed Logon
+### 1. Event ID 4625 â€” Failed Logon
 
 The 4625 event showed a failed authentication attempt involving the `lenovo` account.
 
 Evidence:
 
 * Event ID: `4625`
-* Logon Type: `2` — Interactive
+* Logon Type: `2` â€” Interactive
 * Account for which logon failed: `lenovo`
 * Failure reason: `Unknown user name or bad password`
 * SubStatus: `0xC000006A`
@@ -922,20 +922,20 @@ The source address was the local loopback address, so the evidence did not indic
 
 I did not classify the event as malicious because the available evidence did not establish malicious intent or compromise.
 
-### 2. Event ID 4624 — Successful Logon
+### 2. Event ID 4624 â€” Successful Logon
 
 The 4624 event showed a successful authentication in a service/system context.
 
 Important evidence included:
 
 * Account: `SYSTEM`
-* Logon Type: `5` — Service
+* Logon Type: `5` â€” Service
 * Process: `services.exe`
 * Source network address: blank
 
 This was not evidence of a user remotely logging into the machine. The Logon Type and process context were consistent with Windows service activity.
 
-### 3. Event ID 4688 — Process Creation
+### 3. Event ID 4688 â€” Process Creation
 
 The 4688 event showed:
 
@@ -946,7 +946,7 @@ I interpreted this as normal Windows operating-system activity. `wininit.exe` cr
 
 There was no evidence in this event alone indicating malicious process creation.
 
-### 4. Event ID 4740 — Account Lockout
+### 4. Event ID 4740 â€” Account Lockout
 
 I searched for Event ID `4740` and did not find a matching account-lockout event.
 
@@ -973,7 +973,7 @@ I found:
 * A local failed interactive authentication attempt.
 * No evidence of a remote authentication source.
 * A successful service/system logon.
-* Normal `wininit.exe → services.exe` process creation.
+* Normal `wininit.exe â†’ services.exe` process creation.
 * No observed account-lockout event.
 * No evidence sufficient to establish malicious activity.
 
@@ -995,7 +995,7 @@ I demonstrated the ability to:
 * Separate observed evidence from assumptions.
 * Avoid declaring an incident without sufficient evidence.
 
-## Windows Log Analysis — Module Status
+## Windows Log Analysis â€” Module Status
 
 **COMPLETE**
 
@@ -1021,7 +1021,7 @@ Planned progression:
 
 
 
-# SIEM Theory — Basic Understanding
+# SIEM Theory â€” Basic Understanding
 
 ## What is a SIEM?
 
@@ -1064,11 +1064,11 @@ The main idea behind a SIEM is centralization.
 For example:
 
 ```text
-Windows ---------┐
-Linux -----------┤
-Servers ---------┼--> SIEM
-Applications ----┤
-Network ---------┘
+Windows ---------â”
+Linux -----------â”¤
+Servers ---------â”¼--> SIEM
+Applications ----â”¤
+Network ---------â”˜
 ```
 
 The SIEM receives information from different sources and makes it available for centralized analysis.
@@ -1114,17 +1114,17 @@ It provides a **centralized environment where security events can be searched an
 
 
 
-# Windows Log Analysis — Splunk Progress
+# Windows Log Analysis â€” Splunk Progress
 
 ## Current Stage
 
-**Windows Security Log Analysis → Process Creation → Persistence Investigation**
+**Windows Security Log Analysis â†’ Process Creation â†’ Persistence Investigation**
 
 My objective is to investigate Windows activity in Splunk using evidence and event correlation rather than treating individual events as proof of compromise.
 
 ---
 
-# PART I — CONFIRMED FINDINGS
+# PART I â€” CONFIRMED FINDINGS
 
 ## 1. Windows Security Log Collection
 
@@ -1140,16 +1140,16 @@ Earlier searches returned thousands of Security events.
 
 Event IDs I confirmed as present included:
 
-* **4624** — successful logon
-* **4625** — failed logon
-* **4672** — special privileges assigned
-* **4688** — process creation
-* **4696** — primary token assigned to process
-* **4826** — Boot Configuration Data loaded
+* **4624** â€” successful logon
+* **4625** â€” failed logon
+* **4672** â€” special privileges assigned
+* **4688** â€” process creation
+* **4696** â€” primary token assigned to process
+* **4826** â€” Boot Configuration Data loaded
 
 ---
 
-## 2. Event 4688 — Process Creation
+## 2. Event 4688 â€” Process Creation
 
 I investigated Event 4688 using:
 
@@ -1202,8 +1202,8 @@ I established that **EventType, EventCode, and Type are separate fields**.
 For Windows Security events:
 
 ```text
-EventType=0 → Success Audit
-EventType=1 → Failure Audit
+EventType=0 â†’ Success Audit
+EventType=1 â†’ Failure Audit
 ```
 
 For the 4688 events I examined:
@@ -1261,7 +1261,7 @@ I did not conclude that LSASS had no command line.
 
 I correlated Windows Security and System events around:
 
-**2026-09-24 13:23–13:26**
+**2026-09-24 13:23â€“13:26**
 
 I confirmed a System Event 41:
 
@@ -1411,7 +1411,7 @@ I therefore stopped the persistence investigation rather than continuing with in
 
 ---
 
-# PART II — PLANNED NEXT STEPS
+# PART II â€” PLANNED NEXT STEPS
 
 ## 1. Verify the Full `main` Index
 
@@ -1503,4 +1503,305 @@ I do not classify an event as malicious or benign based on a single indicator.
 My objective is to build an evidence-based Windows investigation in Splunk and eventually correlate Windows, Linux, authentication, process, persistence, and network evidence.
 
 
+
+
+
+
+
+
+
+
+# SIEM Investigation â€” Kernel-Power and Windows Logon Correlation
+
+## Investigation Objective
+
+Todayâ€™s investigation focused on host-based forensic analysis of the Windows endpoint `KAZEN-ZW` using Splunk, Windows Event Logs, PowerShell, temporal correlation, and cross-source analysis.
+
+The investigation followed the methodology:
+
+**Incident â†’ Timeline â†’ Correlation â†’ Hypothesis â†’ Test â†’ Conclusion**
+
+The main objective was to determine what could be established from the available evidence without treating correlation as proof of causation.
+
+---
+
+## Phase 1 â€” Kernel-Power Investigation
+
+### Event Investigated
+
+**Event ID:** 41
+**Source:** `Microsoft-Windows-Kernel-Power`
+**Time:** `2026-09-24 13:23:42.395`
+**Task Category:** 63
+**BugcheckCode:** `0`
+
+The BugcheckCode was extracted from the System log using PowerShell.
+
+The value `0` indicates that Windows did not record a bugcheck code for the event. This does **not**, by itself, establish whether the underlying cause was physical power loss, thermal protection, hardware failure, or another type of abrupt shutdown.
+
+### Correlation Findings
+
+Additional System and Application logs were examined around the event.
+
+WHEA-Logger results did not provide supporting hardware-error events in the queried channel.
+
+The investigation also identified later Splunk-related `.rbsentinel` events, but their timestamps occurred on September 26â€“27 and therefore could not be used as direct evidence for the September 24 Kernel-Power event.
+
+### Final Finding
+
+The September 24 Event 41 was ultimately explained by the known physical action taken on the machine: the system had become extremely slow/unresponsive and the power button was used to force the shutdown.
+
+Therefore, the investigation did **not** establish thermal shutdown as the cause.
+
+---
+
+# Phase 2 â€” Splunk `.rbsentinel` Artifact Correlation
+
+Splunk `_internal` logs were searched for bucket and repair-related warnings.
+
+The investigation found repeated messages from `IndexerService` involving the removal of `.rbsentinel` artifact directories.
+
+These events occurred primarily on:
+
+* September 26
+* September 27
+
+The `.rbsentinel` artifacts were treated as **Splunk bucket/recovery artifacts**, not as Kernel-Power events.
+
+### Investigative Purpose
+
+The objective was not to determine who removed the artifacts.
+
+Instead, the investigation considered whether recurring artifact appearance/removal could be correlated chronologically with:
+
+**Kernel-Power â†’ system restart/boot â†’ Splunk recovery state â†’ sentinel removal**
+
+Repeated sequences could potentially establish a recurring temporal relationship.
+
+However, the available September 26â€“27 sentinel events could not be used to prove what happened during the September 14 Kernel-Power sequence.
+
+### Finding
+
+The artifacts are useful forensic timeline markers, but `.rbsentinel` removal alone does not establish that a Kernel-Power event caused them.
+
+---
+
+# Phase 3 â€” Splunkd Service Logon
+
+## Event
+
+**Event ID:** 4624
+**Time:** `2026-09-14 21:31:38.242`
+**Account:** `NT SERVICE\Splunkd`
+**Logon Type:** `5`
+**Process:** `C:\Windows\System32\services.exe`
+
+The event showed:
+
+* Subject: `KAZEN-ZW$`
+* Security ID: `S-1-5-18`
+* Logon Type: `5`
+* New Logon: `Splunkd`
+* Domain: `NT SERVICE`
+* Process: `services.exe`
+* Authentication: `Negotiate`
+* Logon Process: `Advapi`
+* No network source address
+
+### Interpretation
+
+Logon Type 5 represents a **service logon**.
+
+The event demonstrates that Windows created a service logon session for `NT SERVICE\Splunkd`.
+
+`services.exe` is the Windows Service Control Manager process responsible for managing Windows services.
+
+However, the event alone does not prove:
+
+* that Splunk indexing began at exactly that millisecond;
+* that `services.exe` launched Splunkd at exactly that moment; or
+* that the event itself was responsible for a preceding system restart.
+
+### Finding
+
+The evidence supports a normal Windows service-logon event for Splunkd, but its exact relationship to the earlier system state was not established from this event alone.
+
+---
+
+# Phase 4 â€” Windows Interactive Logon Investigation
+
+## Investigation Target
+
+**Event ID:** 4624
+**Time:** `2026-09-15 09:40:49.112`
+**Account:** `lenovo`
+**Logon Type:** `2`
+
+The event contained:
+
+* Account: `KAZEN-ZW\lenovo`
+* Logon Type: `2` â€” Interactive
+* Process ID: `0xc50`
+* Process: `C:\Windows\System32\svchost.exe`
+* Workstation: `KAZEN-ZW`
+* Source Address: `127.0.0.1`
+* Source Port: `0`
+* Logon Process: `User32`
+* Authentication Package: `Negotiate`
+* Elevated Token: `Yes` on one corresponding 4624 event
+* Linked Logon ID: `0x6FC02B`
+* Logon ID: `0x6FBFA4`
+
+The investigation found another 4624 event at the **same timestamp** with the same process ID and linked logon identifiers but a different elevation state.
+
+---
+
+## Correlation of the Logon Events
+
+The surrounding five-minute timeline was examined.
+
+Important events included:
+
+| Time          |     Event | Observation                         |
+| ------------- | --------: | ----------------------------------- |
+| 09:40:44.167  |      4672 | SYSTEM special privileges           |
+| 09:40:44.167  |      4624 | SYSTEM Type 5 / `services.exe`      |
+| 09:40:47.777  |      5379 | Credential-related event            |
+| 09:40:48.484  |      4798 | `KAZEN-ZW$` â†’ `lenovo`, `lsass.exe` |
+| 09:40:49.112  |      4672 | `lenovo` privileges                 |
+| 09:40:49.112  |      4624 | `lenovo`, Type 2                    |
+| 09:40:49.112  |      4624 | `lenovo`, Type 2, elevated token    |
+| 09:40:49.112  |      4648 | Explicit credentials, `svchost.exe` |
+| 09:40:58.804  |      4799 | `KAZEN-ZW$`, `svchost.exe`          |
+| 09:40:58.978+ | 4624/4672 | Additional SYSTEM service activity  |
+
+The two 4624 events shared the same:
+
+* timestamp;
+* process ID `0xc50`;
+* account;
+* linked logon relationship.
+
+One recorded `Elevated Token = No`, while the other recorded `Elevated Token = Yes`.
+
+---
+
+# Phase 5 â€” Event 4648 Correlation
+
+The associated Event 4648 showed:
+
+* Account whose credentials were used: `lenovo`
+* Target server: `localhost`
+* Process ID: `0xc50`
+* Process: `C:\Windows\System32\svchost.exe`
+* Network address: `127.0.0.1`
+* Port: `0`
+
+Event 4648 represents an attempted logon using **explicit credentials**.
+
+The identical timestamp and process ID strongly correlate this event with the 4624 logon events.
+
+The loopback address `127.0.0.1` supports the conclusion that the authentication activity was local rather than originating from a conventional remote network source.
+
+The evidence does not, however, identify exactly which user-facing action initiated the request.
+
+---
+
+# Phase 6 â€” Testing the Precursor Hypotheses
+
+The investigation tested whether the 09:40:49 interactive logon was preceded by a system sleep/resume or startup event.
+
+### Sleep/Resume Search
+
+The following System Event IDs were checked:
+
+* Event 1 â€” Power-Troubleshooter
+* Event 42 â€” Kernel-Power
+* Event 107 â€” Kernel-Power
+
+No matching results were returned for September 15.
+
+### Startup/Shutdown Search
+
+The following events were also checked:
+
+* Event 6005
+* Event 6006
+* Event 12
+* Event 13
+
+No matching results were returned for September 15.
+
+### Important Forensic Limitation
+
+The absence of these specific events does **not** prove that the computer was definitely powered off, definitely awake, or that a particular physical action occurred.
+
+It only establishes that the queried event IDs did not provide evidence for those states in the available logs.
+
+Therefore, the investigation did not claim that a cold boot, screen unlock, or UAC prompt was definitively responsible.
+
+---
+
+# Final Finding for the 09:40:49 Event
+
+The available evidence establishes that:
+
+1. `KAZEN-ZW\lenovo` received an interactive Type 2 logon session.
+2. The activity was local, with source address `127.0.0.1`.
+3. `svchost.exe` with PID `0xc50` was associated with the authentication activity.
+4. Event 4648 shows explicit use of the `lenovo` credentials against `localhost`.
+5. The 4624 events share the same timestamp, process ID, and linked logon identifiers.
+6. One corresponding logon session had an elevated token while another did not.
+7. The queried System logs did not establish a preceding sleep/resume or startup event.
+8. The available evidence is **consistent with local authentication/token activity**, potentially including elevation-related Windows behavior, but it does not independently prove the exact user action or application that triggered it.
+
+The exact application or user action responsible would require further correlation, such as relevant Event ID 4688 process-creation events or additional Windows operational logs.
+
+---
+
+# SOC Methodology Learned
+
+This investigation reinforced several important forensic principles.
+
+### 1. Start with an Anchor Event
+
+A known event provides a fixed point from which the investigation can expand.
+
+### 2. Build a Timeline
+
+Events immediately before and after the anchor can reveal sequences that are invisible when looking at a single event.
+
+### 3. Correlate Across Sources
+
+Security, System, Application, and Splunk internal logs provide different perspectives of the same host.
+
+### 4. Correlation Is Not Causation
+
+Events occurring together can demonstrate a relationship or sequence without proving that one caused the other.
+
+### 5. Absence of Evidence Must Be Interpreted Carefully
+
+A missing event can eliminate a hypothesis only when the logging conditions are understood. A blank search is not automatically proof that the underlying action never occurred.
+
+### 6. Test the Hypothesis
+
+Instead of accepting the first explanation, search for evidence that supports **and contradicts** the hypothesis.
+
+### 7. Identify Evidence Gaps
+
+A good investigation ends by distinguishing:
+
+**What was proven â†’ what was strongly supported â†’ what remains unknown.**
+
+---
+
+# Overall Investigation Outcome
+
+The investigation progressed from isolated Windows events to a structured host-based forensic methodology.
+
+The most important learning was not a single Event ID. It was the process of moving from:
+
+**Event -> Context -> Timeline -> Correlation -> Hypothesis -> Verification -> Evidence Gap**
+
+This approach will be reused for future SIEM investigations.
 
